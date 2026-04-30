@@ -1,13 +1,3 @@
-[project]
-name = "cc_localization"
-version = "0.1.0"
-description = "Collective-Construction Localization: ArUco-based localization of nested coordinate frames for the construction cell."
-readme = "README.md"
-requires-python = ">=3.14"
-dependencies = [
-    "opencv-python>=4.13.0.92",
-]
-
 [tool.ruff]
 target-version = "py313"
 line-length = 120

@@ -12,6 +12,8 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/config', ['config/gopro_calib.npz']),
         ('share/' + package_name + '/scripts', ['scripts/activate_gopro.sh']),
+        ('share/' + package_name + '/launch', ['launch/cc_localization_viz.launch.py']),
+        ('share/' + package_name + '/rviz', ['rviz/aruco_tf.rviz']),
     ],
     package_data={'': ['py.typed']},
     install_requires=['setuptools'],
@@ -28,6 +30,7 @@ setup(
     entry_points={
         'console_scripts': [
             'aruco_detect = cc_localization.aruco_detect:main',
+            'aruco_tf_node = cc_localization.aruco_tf_node:main',
         ],
     },
 )
