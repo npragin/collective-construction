@@ -232,7 +232,12 @@ class ArucoTfNode(Node):
                 if tag_id_int in FRAME_TAG_IDS:
                     continue
                 ok, rvec_t, tvec_t = cv2.solvePnP(
-                    self.tag_local, corners[i], self.mtx, self.dist, False, cv2.SOLVEPNP_IPPE_SQUARE,
+                    self.tag_local,
+                    corners[i],
+                    self.mtx,
+                    self.dist,
+                    False,
+                    cv2.SOLVEPNP_IPPE_SQUARE,
                 )
                 if not ok:
                     continue

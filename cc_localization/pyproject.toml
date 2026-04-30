@@ -1,6 +1,7 @@
 [tool.ruff]
 target-version = "py313"
 line-length = 120
+exclude = ["test"]
 
 [tool.ruff.lint]
 select = [
@@ -39,6 +40,7 @@ ros = ["rclpy", "rcl_interfaces", "geometry_msgs", "nav_msgs", "nav2_msgs", "sen
 
 [tool.mypy]
 python_version = "3.13"
+exclude = '(^|/)test/'
 
 check_untyped_defs = true
 

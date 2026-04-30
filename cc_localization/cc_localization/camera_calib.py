@@ -62,9 +62,7 @@ if len(obj_points) < 5:
     print("Not enough frames to calibrate")
 else:
     print("Calibrating...")
-    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
-        obj_points, img_points, gray.shape[::-1], None, None
-    )
+    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(obj_points, img_points, gray.shape[::-1], None, None)
     np.savez("gopro_calib.npz", camera_matrix=mtx, dist_coeffs=dist)
     print(f"RMS reprojection error: {ret:.4f}")
     print("Saved to gopro_calib.npz")

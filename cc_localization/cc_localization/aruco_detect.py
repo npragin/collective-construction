@@ -1,7 +1,9 @@
+# ruff: noqa: N806
+from pathlib import Path
+
 import cv2
 import numpy as np
 from ament_index_python.packages import get_package_share_directory
-from pathlib import Path
 
 DEVICE_ID = 42
 MARKER_SIZE = 0.15  # meters — printed marker side length
@@ -48,8 +50,11 @@ TAG_LOCAL = np.array(
 
 
 def solve_frame(tag_corners, ids_flat, corners, mtx, dist):
-    """Solve PnP for a frame defined by a dict of {tag_id: (x, y)} corner positions.
-    Returns (ok, rvec, tvec) where rvec/tvec map points from frame coords to camera coords."""
+    """
+    Solve PnP for a frame defined by a dict of {tag_id: (x, y)} corner positions.
+
+    Returns (ok, rvec, tvec) where rvec/tvec map points from frame coords to camera coords.
+    """
     obj_list, img_list = [], []
     for tag_id, (cx, cy) in tag_corners.items():
         if tag_id not in ids_flat:
@@ -66,9 +71,7 @@ def solve_frame(tag_corners, ids_flat, corners, mtx, dist):
 
 
 def main():
-    detector = cv2.aruco.ArucoDetector(
-        cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-    )
+    detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
 
     cap = cv2.VideoCapture(DEVICE_ID)
     cv2.namedWindow("ArUco")
@@ -86,12 +89,8 @@ def main():
         if ids is not None:
             cv2.aruco.drawDetectedMarkers(frame, corners, ids)
 
-        outer_ok, rvec_w, tvec_w, n_outer = solve_frame(
-            OUTER_TAG_CORNERS, ids_flat, corners, mtx, dist
-        )
-        inner_ok, rvec_i, tvec_i, n_inner = solve_frame(
-            INNER_TAG_CORNERS, ids_flat, corners, mtx, dist
-        )
+        outer_ok, rvec_w, tvec_w, n_outer = solve_frame(OUTER_TAG_CORNERS, ids_flat, corners, mtx, dist)
+        inner_ok, rvec_i, tvec_i, n_inner = solve_frame(INNER_TAG_CORNERS, ids_flat, corners, mtx, dist)
 
         if outer_ok:
             cv2.drawFrameAxes(frame, mtx, dist, rvec_w, tvec_w, outer_axis_len, 3)
@@ -119,9 +118,7 @@ def main():
             for i, tag_id in enumerate(ids_flat):
                 if int(tag_id) in FRAME_TAG_IDS:
                     continue
-                ok, _, tvec_t = cv2.solvePnP(
-                    TAG_LOCAL, corners[i], mtx, dist, False, cv2.SOLVEPNP_IPPE_SQUARE
-                )
+                ok, _, tvec_t = cv2.solvePnP(TAG_LOCAL, corners[i], mtx, dist, False, cv2.SOLVEPNP_IPPE_SQUARE)
                 if not ok:
                     continue
                 c = corners[i].reshape(-1, 2).mean(axis=0).astype(int)
