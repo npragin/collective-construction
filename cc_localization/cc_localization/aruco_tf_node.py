@@ -239,7 +239,11 @@ class ArucoTfNode(Node):
                 R_tc, _ = cv2.Rodrigues(rvec_t)
                 R_wt = R_wc.T @ R_tc
                 t_wt = R_wc.T @ (tvec_t.flatten() - tvec_w.flatten())
-                transforms.append(self.make_transform(self.world_frame, f"aruco_{tag_id_int}", R_wt, t_wt))
+                # Ground-robot constraint: keep only yaw about world +z; drop roll/pitch jitter.
+                yaw = float(np.arctan2(R_wt[1, 0], R_wt[0, 0]))
+                c, s = np.cos(yaw), np.sin(yaw)
+                R_wt_yaw = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+                transforms.append(self.make_transform(self.world_frame, f"aruco_{tag_id_int}", R_wt_yaw, t_wt))
 
         if transforms:
             self.broadcaster.sendTransform(transforms)
