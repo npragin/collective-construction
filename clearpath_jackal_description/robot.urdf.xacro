@@ -49,21 +49,15 @@
 
   <!-- lidar2d_0 -->
   <xacro:include filename="$(find clearpath_sensors_description)/urdf/hokuyo_ust.urdf.xacro"/>
-  <xacro:hokuyo_ust name="lidar2d_0" parent_link="bracket_0_mount" ang_res="0.5" min_ang="-3.141592653589793" max_ang="3.141592653589793" min_range="0.05" max_range="25.0" update_rate="40">
+  <xacro:hokuyo_ust name="lidar2d_0" parent_link="front_fender_mount" ang_res="0.5" min_ang="-3.141592653589793" max_ang="3.141592653589793" min_range="0.05" max_range="25.0" update_rate="40">
     <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
   </xacro:hokuyo_ust>
 
   <!-- lidar2d_1 -->
   <xacro:include filename="$(find clearpath_sensors_description)/urdf/hokuyo_ust.urdf.xacro"/>
-  <xacro:hokuyo_ust name="lidar2d_1" parent_link="bracket_1_mount" ang_res="0.5" min_ang="-3.141592653589793" max_ang="3.141592653589793" min_range="0.05" max_range="25.0" update_rate="40">
+  <xacro:hokuyo_ust name="lidar2d_1" parent_link="rear_fender_mount" ang_res="0.5" min_ang="-3.141592653589793" max_ang="3.141592653589793" min_range="0.05" max_range="25.0" update_rate="40">
     <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 3.1415"/>
   </xacro:hokuyo_ust>
-
-  <!-- lidar3d_0 -->
-  <xacro:include filename="$(find clearpath_sensors_description)/urdf/velodyne_lidar.urdf.xacro"/>
-  <xacro:velodyne_lidar name="lidar3d_0" parent_link="default_mount" ang_res_h="0.4" ang_res_v="2.0" min_ang_h="-3.141592" max_ang_h="3.141592" min_ang_v="-0.261799" max_ang_v="0.261799" min_range="0.9" max_range="130.0" update_rate="20">
-    <origin xyz="0.0 0.0 0.1" rpy="0.0 0.0 0.0"/>
-  </xacro:velodyne_lidar>
 
   <!-- camera_0 -->
   <xacro:include filename="$(find clearpath_sensors_description)/urdf/intel_realsense.urdf.xacro"/>

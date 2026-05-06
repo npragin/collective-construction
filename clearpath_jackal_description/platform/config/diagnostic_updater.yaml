@@ -18,10 +18,6 @@ j100_0897:
       topics.sensors/lidar2d_0/scan.rate: 40.0
       topics.sensors/lidar2d_1/scan.type: 'sensor_msgs/msg/LaserScan'
       topics.sensors/lidar2d_1/scan.rate: 40.0
-      topics.sensors/lidar3d_0/scan.type: 'sensor_msgs/msg/LaserScan'
-      topics.sensors/lidar3d_0/scan.rate: 20.0
-      topics.sensors/lidar3d_0/points.type: 'sensor_msgs/msg/PointCloud2'
-      topics.sensors/lidar3d_0/points.rate: 20.0
       topics.sensors/camera_0/color/image.type: 'sensor_msgs/msg/Image'
       topics.sensors/camera_0/color/image.rate: 30.0
       topics.sensors/camera_0/depth/image.type: 'sensor_msgs/msg/Image'

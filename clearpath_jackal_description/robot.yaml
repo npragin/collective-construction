@@ -36,44 +36,6 @@ platform:
     wheels:
       front: outdoor
       rear: outdoor
-# platform:
-#   controller: ps4
-#   battery:
-#     model: ES20_12C
-#     configuration: S2P1
-#   attachments:
-#     - name: front_bumper
-#       type: a200.bumper
-#       model: default
-#       parent: front_bumper_mount
-#       xyz: [0.0, 0.0, 0.0]
-#       rpy: [0.0, 0.0, 0.0]
-#       enabled: true
-#       extension: 0.0
-#     - name: rear_bumper
-#       type: a200.bumper
-#       model: default
-#       parent: rear_bumper_mount
-#       xyz: [0.0, 0.0, 0.0]
-#       rpy: [0.0, 0.0, 0.0]
-#       enabled: true
-#       extension: 0.0
-#     - name: top_plate
-#       type: a200.top_plate
-#       model: pacs
-#       parent: default_mount
-#       xyz: [0.0, 0.0, 0.0]
-#       rpy: [0.0, 0.0, 0.0]
-#       enabled: true
-#     - name: sensor_arch
-#       type: a200.sensor_arch
-#       model: sensor_arch_300
-#       parent: default_mount
-#       xyz: [0.0, 0.0, 0.0]
-#       rpy: [0.0, 0.0, 0.0]
-#       enabled: true
-#   extras:
-#     urdf: {}
 links:
   cylinder:
   - name: cylinder
@@ -114,7 +76,7 @@ sensors:
   - model: hokuyo_ust
     urdf_enabled: true
     launch_enabled: true
-    parent: bracket_0_mount
+    parent: front_fender_mount
     xyz: [0.0, 0.0, 0.0]
     rpy: [0.0, 0.0, 0.0]
     ros_parameters:
@@ -127,7 +89,7 @@ sensors:
   - model: hokuyo_ust
     urdf_enabled: true
     launch_enabled: true
-    parent: bracket_1_mount
+    parent: rear_fender_mount
     xyz: [0.0, 0.0, 0.0]
     rpy: [0.0, 0.0, 3.1415]
     ros_parameters:
@@ -137,23 +99,35 @@ sensors:
         ip_port: 10940
         angle_min: -3.141592653589793
         angle_max: 3.141592653589793
-  lidar3d:
-  - model: velodyne_lidar
-    urdf_enabled: true
-    launch_enabled: true
-    parent: default_mount
-    xyz: [0.0, 0.0, 0.1]
-    rpy: [0.0, 0.0, 0.0]
-    ros_parameters:
-      velodyne_driver_node:
-        frame_id: lidar3d_0_laser
-        device_ip: 192.168.131.25
-        port: 2368
-        model: VLP16
-      velodyne_transform_node:
-        model: VLP16
-        fixed_frame: lidar3d_0_laser
-        target_frame: lidar3d_0_laser
+  # lidar3d:
+  # - model: velodyne_lidar
+  #   urdf_enabled: true
+  #   launch_enabled: true
+  #   parent: default_mount
+  #   xyz: [0.0, 0.0, 0.1]
+  #   rpy: [0.0, 0.0, 0.0]
+  #   ros_parameters:
+  #     velodyne_driver_node:
+  #       frame_id: lidar3d_0_laser
+  #       device_ip: 192.168.131.22
+  #       port: 2368
+  #       model: VLP16
+  #     velodyne_transform_node:
+  #       model: VLP16
+  #       fixed_frame: lidar3d_0_laser
+  #       target_frame: lidar3d_0_laser
+      imu:
+    - model: redshift_um7
+      urdf_enabled: true
+      launch_enabled: true
+      parent: base_link
+      xyz: [0.0, 0.0, 0.0]
+      rpy: [0.0, 0.0, 0.0]
+      ros_parameters:
+        um7_driver:
+          port: /dev/clearpath/um7
+          frame_id: imu_0_link
+          tf_ned_to_enu: true
 
 manipulators:
   arms:

@@ -27,7 +27,7 @@ def generate_launch_description():
                 {
                     'use_sim_time': True
                     ,
-                    'config_file': '/home/jn2-alt/clearpath/sensors/config/camera_0.yaml'
+                    'config_file': '/home/jn2-alt/college/2025-2026/spring/ROB599_multi_robot/collective-construction/clearpath_jackal_description/sensors/config/camera_0.yaml'
                     ,
                 }
                 ,

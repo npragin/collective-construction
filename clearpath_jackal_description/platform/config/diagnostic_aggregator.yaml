@@ -44,9 +44,6 @@ j100_0897:
       sensors.analyzers.lidar2d.type: 'diagnostic_aggregator/GenericAnalyzer'
       sensors.analyzers.lidar2d.path: 'Lidar2D'
       sensors.analyzers.lidar2d.contains: ['lidar2d']
-      sensors.analyzers.lidar3d.type: 'diagnostic_aggregator/GenericAnalyzer'
-      sensors.analyzers.lidar3d.path: 'Lidar3D'
-      sensors.analyzers.lidar3d.contains: ['lidar3d']
       sensors.analyzers.cameras.type: 'diagnostic_aggregator/GenericAnalyzer'
       sensors.analyzers.cameras.path: 'Cameras'
       sensors.analyzers.cameras.contains: ['camera']

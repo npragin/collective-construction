@@ -10,7 +10,7 @@ def generate_launch_description():
 
     launch_arg_imu_filter = DeclareLaunchArgument(
         'imu_filter',
-        default_value='/home/jn2-alt/clearpath/platform/config/imu_filter.yaml',
+        default_value='/home/jn2-alt/college/2025-2026/spring/ROB599_multi_robot/collective-construction/clearpath_jackal_description/platform/config/imu_filter.yaml',
         description='')
 
     imu_filter = LaunchConfiguration('imu_filter')
@@ -30,7 +30,7 @@ def generate_launch_description():
                 (
                     'setup_path'
                     ,
-                    '/home/jn2-alt/clearpath/'
+                    '/home/jn2-alt/college/2025-2026/spring/ROB599_multi_robot/collective-construction/clearpath_jackal_description'
                 )
                 ,
                 (
@@ -146,7 +146,7 @@ def generate_launch_description():
                 {
                     'use_sim_time': True
                     ,
-                    'config_file': '/home/jn2-alt/clearpath/sensors/config/imu_0.yaml'
+                    'config_file': '/home/jn2-alt/college/2025-2026/spring/ROB599_multi_robot/collective-construction/clearpath_jackal_description/sensors/config/imu_0.yaml'
                     ,
                 }
                 ,
@@ -207,7 +207,7 @@ def generate_launch_description():
                 {
                     'use_sim_time': True
                     ,
-                    'config_file': '/home/jn2-alt/clearpath/sensors/config/gps_0.yaml'
+                    'config_file': '/home/jn2-alt/college/2025-2026/spring/ROB599_multi_robot/collective-construction/clearpath_jackal_description/sensors/config/gps_0.yaml'
                     ,
                 }
                 ,

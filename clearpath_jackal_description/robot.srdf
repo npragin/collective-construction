@@ -100,7 +100,6 @@
     <disable_collisions link1="arm_0_base_link" link2="cylinder_link" reason="Adjacent"/>
     <disable_collisions link1="arm_0_base_link" link2="front_left_wheel_link" reason="Never"/>
     <disable_collisions link1="arm_0_base_link" link2="front_right_wheel_link" reason="Never"/>
-    <disable_collisions link1="arm_0_base_link" link2="lidar3d_0_link" reason="Adjacent"/>
     <disable_collisions link1="arm_0_base_link" link2="rear_left_wheel_link" reason="Never"/>
     <disable_collisions link1="arm_0_base_link" link2="rear_right_wheel_link" reason="Never"/>
     <disable_collisions link1="arm_0_forearm_link" link2="arm_0_gripper_gripper_base_link" reason="Never"/>
@@ -148,7 +147,6 @@
     <disable_collisions link1="bracket_0_link" link2="cylinder_link" reason="Adjacent"/>
     <disable_collisions link1="bracket_0_link" link2="front_left_wheel_link" reason="Never"/>
     <disable_collisions link1="bracket_0_link" link2="front_right_wheel_link" reason="Never"/>
-    <disable_collisions link1="bracket_0_link" link2="lidar3d_0_link" reason="Adjacent"/>
     <disable_collisions link1="bracket_0_link" link2="rear_left_wheel_link" reason="Never"/>
     <disable_collisions link1="bracket_0_link" link2="rear_right_wheel_link" reason="Never"/>
     <disable_collisions link1="bracket_1_link" link2="camera_0_link" reason="Never"/>
@@ -156,35 +154,27 @@
     <disable_collisions link1="bracket_1_link" link2="cylinder_link" reason="Adjacent"/>
     <disable_collisions link1="bracket_1_link" link2="front_left_wheel_link" reason="Never"/>
     <disable_collisions link1="bracket_1_link" link2="front_right_wheel_link" reason="Never"/>
-    <disable_collisions link1="bracket_1_link" link2="lidar3d_0_link" reason="Adjacent"/>
     <disable_collisions link1="bracket_1_link" link2="rear_left_wheel_link" reason="Never"/>
     <disable_collisions link1="bracket_1_link" link2="rear_right_wheel_link" reason="Never"/>
     <disable_collisions link1="camera_0_link" link2="chassis_link" reason="Adjacent"/>
     <disable_collisions link1="camera_0_link" link2="cylinder_link" reason="Never"/>
     <disable_collisions link1="camera_0_link" link2="front_left_wheel_link" reason="Never"/>
     <disable_collisions link1="camera_0_link" link2="front_right_wheel_link" reason="Never"/>
-    <disable_collisions link1="camera_0_link" link2="lidar3d_0_link" reason="Never"/>
     <disable_collisions link1="camera_0_link" link2="rear_left_wheel_link" reason="Never"/>
     <disable_collisions link1="camera_0_link" link2="rear_right_wheel_link" reason="Never"/>
     <disable_collisions link1="chassis_link" link2="cylinder_link" reason="Adjacent"/>
     <disable_collisions link1="chassis_link" link2="front_left_wheel_link" reason="Adjacent"/>
     <disable_collisions link1="chassis_link" link2="front_right_wheel_link" reason="Adjacent"/>
-    <disable_collisions link1="chassis_link" link2="lidar3d_0_link" reason="Adjacent"/>
     <disable_collisions link1="chassis_link" link2="rear_left_wheel_link" reason="Adjacent"/>
     <disable_collisions link1="chassis_link" link2="rear_right_wheel_link" reason="Adjacent"/>
     <disable_collisions link1="cylinder_link" link2="front_left_wheel_link" reason="Never"/>
     <disable_collisions link1="cylinder_link" link2="front_right_wheel_link" reason="Never"/>
-    <disable_collisions link1="cylinder_link" link2="lidar3d_0_link" reason="Adjacent"/>
     <disable_collisions link1="cylinder_link" link2="rear_left_wheel_link" reason="Never"/>
     <disable_collisions link1="cylinder_link" link2="rear_right_wheel_link" reason="Never"/>
     <disable_collisions link1="front_left_wheel_link" link2="front_right_wheel_link" reason="Never"/>
-    <disable_collisions link1="front_left_wheel_link" link2="lidar3d_0_link" reason="Never"/>
     <disable_collisions link1="front_left_wheel_link" link2="rear_left_wheel_link" reason="Never"/>
     <disable_collisions link1="front_left_wheel_link" link2="rear_right_wheel_link" reason="Never"/>
-    <disable_collisions link1="front_right_wheel_link" link2="lidar3d_0_link" reason="Never"/>
     <disable_collisions link1="front_right_wheel_link" link2="rear_left_wheel_link" reason="Never"/>
     <disable_collisions link1="front_right_wheel_link" link2="rear_right_wheel_link" reason="Never"/>
-    <disable_collisions link1="lidar3d_0_link" link2="rear_left_wheel_link" reason="Never"/>
-    <disable_collisions link1="lidar3d_0_link" link2="rear_right_wheel_link" reason="Never"/>
     <disable_collisions link1="rear_left_wheel_link" link2="rear_right_wheel_link" reason="Never"/>
 </robot>
