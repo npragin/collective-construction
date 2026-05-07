@@ -108,7 +108,7 @@ class ArucoTfNode(Node):
         self.declare_parameter("stockpile_width", 0.30)
         self.declare_parameter("koz_mask_resolution", 0.05)
         self.declare_parameter("world_frame", "world")
-        self.declare_parameter("inner_frame", "inner")
+        self.declare_parameter("inner_frame", "build")
         self.declare_parameter("camera_frame", "camera")
         self.declare_parameter("tick_rate_hz", 30.0)
 
