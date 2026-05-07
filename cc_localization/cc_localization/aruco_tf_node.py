@@ -122,7 +122,7 @@ class ArucoTfNode(Node):
             self.get_parameter("stockpile_length").get_parameter_value().double_value,
             self.get_parameter("stockpile_width").get_parameter_value().double_value,
         )
-        self.koz_resolution = self.get_parameter("koz_resolution").get_parameter_value().double_value
+        self.koz_resolution = self.get_parameter("koz_mask_resolution").get_parameter_value().double_value
         self.world_frame = self.get_parameter("world_frame").get_parameter_value().string_value
         self.inner_frame = self.get_parameter("inner_frame").get_parameter_value().string_value
         self.camera_frame = self.get_parameter("camera_frame").get_parameter_value().string_value
@@ -270,10 +270,11 @@ class ArucoTfNode(Node):
         # world -> camera: invert the outer PnP.
         transforms.append(self.make_transform(self.world_frame, self.camera_frame, R_cw, -R_cw @ t_w))
 
-        # world -> inner: compose outer^-1 with inner.
+        # world -> inner: compose outer^-1 with inner, then flatten to (x, y, yaw).
         if inner_ok:
-            R_wi = R_cw @ cv2.Rodrigues(rvec_i)[0]
+            R_wi = yaw_only(R_cw @ cv2.Rodrigues(rvec_i)[0])
             t_wi = R_cw @ (tvec_i.flatten() - t_w)
+            t_wi[2] = 0.0
             transforms.append(self.make_transform(self.world_frame, self.inner_frame, R_wi, t_wi))
             rects.append(rect_in_world(R_wi[:2, :2], t_wi[:2], *self.inner_dims))
 
@@ -295,6 +296,7 @@ class ArucoTfNode(Node):
                 continue
             R_wt = yaw_only(R_cw @ cv2.Rodrigues(rvec_t)[0])
             t_wt = R_cw @ (tvec_t.flatten() - t_w)
+            t_wt[2] = 0.0
             if tid in STOCKPILE_TAG_IDS:
                 # Shift origin from tag center to rectangle bottom-left.
                 t_wt = t_wt - R_wt @ np.array([sl / 2.0, sw / 2.0, 0.0])
