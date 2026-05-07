@@ -14,6 +14,7 @@ from ament_index_python.packages import get_package_share_directory
 
 import rclpy
 from geometry_msgs.msg import Point, TransformStamped
+from nav_msgs.msg import OccupancyGrid
 from rclpy.node import Node
 from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker, MarkerArray
@@ -22,7 +23,9 @@ from visualization_msgs.msg import Marker, MarkerArray
 # (origin -> +X -> +X+Y -> +Y). Edit here if the printed tags change.
 OUTER_TAG_IDS = (0, 1, 2, 3)
 INNER_TAG_IDS = (4, 5, 6, 7)
-FRAME_TAG_IDS = set(OUTER_TAG_IDS) | set(INNER_TAG_IDS)
+# Each stockpile tag sits at the center of its own rectangle (single-tag frame).
+STOCKPILE_TAG_IDS = (8, 9, 10)
+NON_ROBOT_TAG_IDS = set(OUTER_TAG_IDS) | set(INNER_TAG_IDS) | set(STOCKPILE_TAG_IDS)
 
 
 def corners_for(ids: tuple[int, int, int, int], length: float, width: float) -> dict[int, tuple[float, float]]:
@@ -43,6 +46,19 @@ def tag_local(marker_size: float) -> np.ndarray:
         [[-half, half, 0.0], [half, half, 0.0], [half, -half, 0.0], [-half, -half, 0.0]],
         dtype=np.float32,
     )
+
+
+def yaw_only(R: np.ndarray) -> np.ndarray:
+    """Project a 3x3 rotation onto its yaw-about-z component."""
+    yaw = float(np.arctan2(R[1, 0], R[0, 0]))
+    c, s = np.cos(yaw), np.sin(yaw)
+    return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+
+
+def rect_in_world(R2: np.ndarray, t2: np.ndarray, length: float, width: float) -> np.ndarray:
+    """Transform a (0,0)->(L,W) rectangle by a 2x2 rotation and 2D translation."""
+    local = np.array([[0.0, 0.0], [length, 0.0], [length, width], [0.0, width]])
+    return (R2 @ local.T).T + t2
 
 
 def rotation_matrix_to_quaternion(R: np.ndarray) -> tuple[float, float, float, float]:
@@ -88,6 +104,9 @@ class ArucoTfNode(Node):
         self.declare_parameter("world_width", 0.885)
         self.declare_parameter("inner_length", 0.41)
         self.declare_parameter("inner_width", 0.54)
+        self.declare_parameter("stockpile_length", 0.30)
+        self.declare_parameter("stockpile_width", 0.30)
+        self.declare_parameter("koz_mask_resolution", 0.05)
         self.declare_parameter("world_frame", "world")
         self.declare_parameter("inner_frame", "inner")
         self.declare_parameter("camera_frame", "camera")
@@ -99,6 +118,11 @@ class ArucoTfNode(Node):
         world_width = self.get_parameter("world_width").get_parameter_value().double_value
         inner_length = self.get_parameter("inner_length").get_parameter_value().double_value
         inner_width = self.get_parameter("inner_width").get_parameter_value().double_value
+        self.stockpile_dims = (
+            self.get_parameter("stockpile_length").get_parameter_value().double_value,
+            self.get_parameter("stockpile_width").get_parameter_value().double_value,
+        )
+        self.koz_resolution = self.get_parameter("koz_resolution").get_parameter_value().double_value
         self.world_frame = self.get_parameter("world_frame").get_parameter_value().string_value
         self.inner_frame = self.get_parameter("inner_frame").get_parameter_value().string_value
         self.camera_frame = self.get_parameter("camera_frame").get_parameter_value().string_value
@@ -124,6 +148,7 @@ class ArucoTfNode(Node):
 
         self.broadcaster = TransformBroadcaster(self)
         self.marker_pub = self.create_publisher(MarkerArray, "workspace_markers", 1)
+        self.koz_pub = self.create_publisher(OccupancyGrid, "koz_mask", 1)
         self.timer = self.create_timer(1.0 / tick_rate_hz, self.tick)
 
     def destroy_node(self) -> None:
@@ -193,6 +218,30 @@ class ArucoTfNode(Node):
         m.points = [Point(x=x, y=y, z=0.0) for x, y in corners]
         return m
 
+    def build_koz_grid(self, rects_world: list[np.ndarray]) -> OccupancyGrid:
+        """Rasterize rotated rectangles (each Nx2 in world coords) into an OccupancyGrid."""
+        wl, ww = self.outer_dims
+        res = self.koz_resolution
+        width = max(1, int(np.ceil(wl / res)))
+        height = max(1, int(np.ceil(ww / res)))
+        mask = np.zeros((height, width), dtype=np.uint8)
+        for rect in rects_world:
+            pix = np.round(rect / res).astype(np.int32)
+            cv2.fillConvexPoly(mask, pix, 100)
+
+        grid = OccupancyGrid()
+        grid.header.stamp = self.get_clock().now().to_msg()
+        grid.header.frame_id = self.world_frame
+        grid.info.resolution = float(res)
+        grid.info.width = width
+        grid.info.height = height
+        grid.info.origin.position.x = 0.0
+        grid.info.origin.position.y = 0.0
+        grid.info.origin.position.z = 0.0
+        grid.info.origin.orientation.w = 1.0
+        grid.data = mask.flatten().astype(np.int8).tolist()
+        return grid
+
     def tick(self) -> None:
         """Read a frame, solve PnP for both frames, and broadcast available transforms."""
         ret, frame = self.cap.read()
@@ -208,64 +257,63 @@ class ArucoTfNode(Node):
         inner_ok, rvec_i, tvec_i = self.solve_frame(self.inner_corners, ids_flat, corners)
 
         transforms = []
+        rects: list[np.ndarray] = []
+        stockpile_ids: list[int] = []
 
-        # world -> camera: invert the outer PnP (which gives world points in camera coords)
-        if outer_ok:
-            R_wc, _ = cv2.Rodrigues(rvec_w)
-            R_cw = R_wc.T
-            t_cw = -R_cw @ tvec_w.flatten()
-            transforms.append(self.make_transform(self.world_frame, self.camera_frame, R_cw, t_cw))
+        if not outer_ok:
+            return
 
-        # world -> inner: compose outer^-1 with inner (both expressed in camera coords)
-        if outer_ok and inner_ok:
-            R_wc, _ = cv2.Rodrigues(rvec_w)
-            R_ic, _ = cv2.Rodrigues(rvec_i)
-            R_wi = R_wc.T @ R_ic
-            t_wi = R_wc.T @ (tvec_i.flatten() - tvec_w.flatten())
+        R_wc = cv2.Rodrigues(rvec_w)[0]
+        R_cw = R_wc.T
+        t_w = tvec_w.flatten()
+
+        # world -> camera: invert the outer PnP.
+        transforms.append(self.make_transform(self.world_frame, self.camera_frame, R_cw, -R_cw @ t_w))
+
+        # world -> inner: compose outer^-1 with inner.
+        if inner_ok:
+            R_wi = R_cw @ cv2.Rodrigues(rvec_i)[0]
+            t_wi = R_cw @ (tvec_i.flatten() - t_w)
             transforms.append(self.make_transform(self.world_frame, self.inner_frame, R_wi, t_wi))
+            rects.append(rect_in_world(R_wi[:2, :2], t_wi[:2], *self.inner_dims))
 
-        # world -> aruco_{id} for any detected tag that doesn't define a frame
-        if outer_ok:
-            R_wc, _ = cv2.Rodrigues(rvec_w)
-            for i, tag_id in enumerate(ids_flat):
-                tag_id_int = int(tag_id)
-                if tag_id_int in FRAME_TAG_IDS:
-                    continue
-                ok, rvec_t, tvec_t = cv2.solvePnP(
-                    self.tag_local,
-                    corners[i],
-                    self.mtx,
-                    self.dist,
-                    False,
-                    cv2.SOLVEPNP_IPPE_SQUARE,
-                )
-                if not ok:
-                    continue
-                R_tc, _ = cv2.Rodrigues(rvec_t)
-                R_wt = R_wc.T @ R_tc
-                t_wt = R_wc.T @ (tvec_t.flatten() - tvec_w.flatten())
-                # Ground-robot constraint: keep only yaw about world +z; drop roll/pitch jitter.
-                yaw = float(np.arctan2(R_wt[1, 0], R_wt[0, 0]))
-                c, s = np.cos(yaw), np.sin(yaw)
-                R_wt_yaw = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
-                transforms.append(self.make_transform(self.world_frame, f"aruco_{tag_id_int}", R_wt_yaw, t_wt))
+        # Per-tag PnP for everything that isn't a frame-defining outer/inner corner.
+        sl, sw = self.stockpile_dims
+        for i, tag_id in enumerate(ids_flat):
+            tid = int(tag_id)
+            if tid in OUTER_TAG_IDS or tid in INNER_TAG_IDS:
+                continue
+            ok, rvec_t, tvec_t = cv2.solvePnP(
+                self.tag_local,
+                corners[i],
+                self.mtx,
+                self.dist,
+                False,
+                cv2.SOLVEPNP_IPPE_SQUARE,
+            )
+            if not ok:
+                continue
+            R_wt = yaw_only(R_cw @ cv2.Rodrigues(rvec_t)[0])
+            t_wt = R_cw @ (tvec_t.flatten() - t_w)
+            if tid in STOCKPILE_TAG_IDS:
+                # Shift origin from tag center to rectangle bottom-left.
+                t_wt = t_wt - R_wt @ np.array([sl / 2.0, sw / 2.0, 0.0])
+                transforms.append(self.make_transform(self.world_frame, f"stockpile_{tid}", R_wt, t_wt))
+                rects.append(rect_in_world(R_wt[:2, :2], t_wt[:2], sl, sw))
+                stockpile_ids.append(tid)
+            else:
+                transforms.append(self.make_transform(self.world_frame, f"aruco_{tid}", R_wt, t_wt))
 
-        if transforms:
-            self.broadcaster.sendTransform(transforms)
+        self.broadcaster.sendTransform(transforms)
+        self.koz_pub.publish(self.build_koz_grid(rects))
 
         markers = MarkerArray()
-        if outer_ok:
-            wl, ww = self.outer_dims
-            markers.markers.append(
-                self.make_rect_marker(self.world_frame, 0, wl, ww, (0.1, 0.9, 0.1)),
-            )
-        if outer_ok and inner_ok:
-            il, iw = self.inner_dims
-            markers.markers.append(
-                self.make_rect_marker(self.inner_frame, 1, il, iw, (0.1, 0.5, 1.0)),
-            )
-        if markers.markers:
-            self.marker_pub.publish(markers)
+        markers.markers.append(self.make_rect_marker(self.world_frame, 0, *self.outer_dims, (0.1, 0.9, 0.1)))
+        if inner_ok:
+            markers.markers.append(self.make_rect_marker(self.inner_frame, 1, *self.inner_dims, (0.1, 0.5, 1.0)))
+        for idx, tid in enumerate(stockpile_ids):
+            markers.markers.append(self.make_rect_marker(f"stockpile_{tid}", 100 + idx, sl, sw, (1.0, 0.3, 0.1)))
+        self.marker_pub.publish(markers)
 
 
 def main() -> None:
