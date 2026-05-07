@@ -24,3 +24,7 @@ j100_0897:
       topics.sensors/camera_0/depth/image.rate: 30.0
       topics.sensors/camera_0/points.type: 'sensor_msgs/msg/PointCloud2'
       topics.sensors/camera_0/points.rate: 30.0
+      topics.sensors/imu_1/data.type: 'sensor_msgs/msg/Imu'
+      topics.sensors/imu_1/data.rate: 20.0
+      topics.sensors/imu_1/mag.type: 'sensor_msgs/msg/MagneticField'
+      topics.sensors/imu_1/mag.rate: 20.0

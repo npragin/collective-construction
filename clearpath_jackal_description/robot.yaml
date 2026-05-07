@@ -9,7 +9,7 @@ system:
     namespace: j100_0897
     domain_id: 0
     middleware:
-      implementation: rmw_fastrtps_cpp
+      implementation: rmw_zenoh_cpp
     workspaces: []
 
 platform:
@@ -59,19 +59,24 @@ sensors:
   - model: intel_realsense
     urdf_enabled: true
     launch_enabled: true
-    parent: base_link
-    xyz: [0.0, 0.0, 0.0]
-    rpy: [0.0, 0.0, 0.0]
+    parent: front_fender_mount
+    xyz: [0.01, 0.0, -0.05]
+    rpy: [3.1415, 0.0, 0.0]
     ros_parameters:
       intel_realsense:
         camera_name: camera_0
         device_type: d435
-        serial_no: "0"
+        serial_no: "138422076588"
         enable_color: true
         rgb_camera.profile: 640,480,30
         enable_depth: true
         depth_module.profile: 640,480,30
         pointcloud.enable: true
+        enable_accel: true
+        accel_fps: 10
+        enable_gyro: true
+        gyro_fps: 10
+        unite_imu_method: 10
   lidar2d:
   - model: hokuyo_ust
     urdf_enabled: true
@@ -116,34 +121,34 @@ sensors:
   #       model: VLP16
   #       fixed_frame: lidar3d_0_laser
   #       target_frame: lidar3d_0_laser
-      imu:
-    - model: redshift_um7
-      urdf_enabled: true
-      launch_enabled: true
-      parent: base_link
-      xyz: [0.0, 0.0, 0.0]
-      rpy: [0.0, 0.0, 0.0]
-      ros_parameters:
-        um7_driver:
-          port: /dev/clearpath/um7
-          frame_id: imu_0_link
-          tf_ned_to_enu: true
+  imu:
+  - model: redshift_um7
+    urdf_enabled: true
+    launch_enabled: true
+    parent: base_link
+    xyz: [0.0, 0.0, 0.0]
+    rpy: [0.0, 0.0, 0.0]
+    ros_parameters:
+      um7_driver:
+        port: /dev/clearpath/um7
+        frame_id: imu_0_link
+        tf_ned_to_enu: true
 
-manipulators:
-  arms:
-    - model: kinova_gen3_lite
-      parent: default_mount
-      xyz: [0.0, 0.0, 0.0]
-      rpy: [0.0, 0.0, 0.0]
-      ip: 192.168.131.40
-      port: 10000
-      poses:
-        - name: custom
-          joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-      gripper:
-        model: kinova_2f_lite
-        xyz: [0.0, 0.0, 0.0]
-        rpy: [0.0, 0.0, 0.0]
-        poses:
-          - name: custom
-            joints: [0.0]
+# manipulators:
+#   arms:
+#     - model: kinova_gen3_lite
+#       parent: default_mount
+#       xyz: [0.0, 0.0, 0.0]
+#       rpy: [0.0, 0.0, 0.0]
+#       ip: 192.168.131.40
+#       port: 10000
+#       poses:
+#         - name: custom
+#           joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+#       gripper:
+#         model: kinova_2f_lite
+#         xyz: [0.0, 0.0, 0.0]
+#         rpy: [0.0, 0.0, 0.0]
+#         poses:
+#           - name: custom
+#             joints: [0.0]

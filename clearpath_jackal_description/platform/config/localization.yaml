@@ -18,3 +18,8 @@ j100_0897:
       imu0_differential: False
       imu0_queue_size: 10
       imu0_remove_gravitational_acceleration: True
+      imu1: 'sensors/imu_1/data'
+      imu1_config: [False, False, False, False, False, False, False, False, False, False, False, True, True, False, False]
+      imu1_differential: False
+      imu1_queue_size: 10
+      imu1_remove_gravitational_acceleration: True
