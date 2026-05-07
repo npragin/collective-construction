@@ -1,0 +1,5 @@
+geometry_msgs/PoseStamped block
+geometry_msgs/PolygonStamped stockpile
+---
+bool success
+---
