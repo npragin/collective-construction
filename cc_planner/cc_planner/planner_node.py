@@ -59,6 +59,7 @@ class PlannerNode(Node):
         self.reported_blocks: list[Block] = []
         # Reported blocks whose type couldn't be bound (no unassigned stockpile).
         self.pending_unbound: list[Block] = []
+
         self._stockpiles_sub = self.create_subscription(Stockpiles, "stockpile_polygons", self._on_stockpiles, 10)
         self._scout_subs = []
         self._action_clients: dict[str, ActionClient] = {}
