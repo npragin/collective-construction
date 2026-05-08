@@ -14,6 +14,14 @@ from rclpy.action import ActionClient
 from rclpy.node import Node
 
 
+def _polygon_centroid_xy(polygon: Polygon) -> tuple[float, float]:
+    """Arithmetic mean of polygon points' xy. Caller guarantees points is non-empty."""
+    n = len(polygon.points)
+    sx = sum(p.x for p in polygon.points)
+    sy = sum(p.y for p in polygon.points)
+    return (sx / n, sy / n)
+
+
 class RobotStatus(Enum):
     IDLE = "idle"
     TASKED = "tasked"
@@ -40,15 +48,21 @@ class PlannerNode(Node):
             robots = yaml.safe_load(f)["robots"]
 
         self.robot_status: dict[str, RobotStatus] = {robot["identifier"]: RobotStatus.IDLE for robot in robots}
+        self.robot_capabilities: dict[str, str] = {robot["identifier"]: robot["capability"] for robot in robots}
 
+        # Every stockpile the planner has ever seen, keyed by aruco tag id.
+        # Polygon updates in place when re-detected; entries are never removed.
+        self.stockpiles: dict[int, PolygonStamped] = {}
+        # Block type (Block.TYPE_*) -> tag id of the bound stockpile. Permanent once set.
+        self.type_to_stockpile: dict[int, int] = {}
+        # Reported blocks whose type is bound but which haven't been retrieved yet.
         self.reported_blocks: list[Block] = []
-        self.stockpile_polygons: list[Polygon] = []
+        # Reported blocks whose type couldn't be bound (no unassigned stockpile).
+        self.pending_unbound: list[Block] = []
         self._stockpiles_sub = self.create_subscription(Stockpiles, "stockpile_polygons", self._on_stockpiles, 10)
         self._scout_subs = []
         self._action_clients: dict[str, ActionClient] = {}
-        for robot in robots:
-            robot_id = robot["identifier"]
-            capability = robot["capability"]
+        for robot_id, capability in self.robot_capabilities.items():
             if capability == "scout":
                 topic = f"{robot_id}/{scout_report_topic}"
                 sub = self.create_subscription(Block, topic, self._on_scout_report, 10)
@@ -62,15 +76,74 @@ class PlannerNode(Node):
                 self._action_clients[robot_id] = ActionClient(self, ManipulationTask, action_name)
 
     def _on_stockpiles(self, msg: Stockpiles) -> None:
-        if not self.stockpile_polygons:
-            self.stockpile_polygons = list(msg.polygons)
-            return
-        for i, poly in enumerate(msg.polygons):
-            if poly.points:
-                self.stockpile_polygons[i] = poly
+        """Upsert detected stockpiles by tag id; drain pending blocks if any new ids appeared."""
+        new_ids = False
+        for tag_id, polygon in zip(msg.ids, msg.polygons, strict=True):
+            tid = int(tag_id)
+            if tid not in self.stockpiles:
+                new_ids = True
+            self.stockpiles[tid] = PolygonStamped(header=msg.header, polygon=polygon)
+        if new_ids and self.pending_unbound:
+            self._drain_pending_unbound()
+
+    def _drain_pending_unbound(self) -> None:
+        """
+        Retry binding for blocks queued earlier when no stockpile was free.
+
+        Preserves arrival order: the first queued block of a given type drives that
+        type's binding. Blocks that still cannot bind remain queued.
+        """
+        remaining: list[Block] = []
+        for block in self.pending_unbound:
+            if block.type in self.type_to_stockpile:
+                self.reported_blocks.append(block)
+                continue
+            tag_id = self._choose_closest_unassigned_stockpile(block.pose.pose.position.x, block.pose.pose.position.y)
+            if tag_id is None:
+                remaining.append(block)
+                continue
+            self.type_to_stockpile[block.type] = tag_id
+            self.get_logger().info(f"(drain) Bound block type {block.type} -> stockpile tag {tag_id}")
+            self.reported_blocks.append(block)
+        self.pending_unbound = remaining
+
+    def _choose_closest_unassigned_stockpile(self, x: float, y: float) -> int | None:
+        """
+        Return the tag id of the unassigned stockpile whose centroid is closest to (x, y).
+
+        Returns None when every known stockpile is already bound to a block type.
+        Distance is squared Euclidean in xy.
+        """
+        candidates = set(self.stockpiles) - set(self.type_to_stockpile.values())
+        if not candidates:
+            return None
+
+        def dist2(tag_id: int) -> float:
+            cx, cy = _polygon_centroid_xy(self.stockpiles[tag_id].polygon)
+            dx, dy = cx - x, cy - y
+            return dx * dx + dy * dy
+
+        return min(candidates, key=dist2)
 
     def _on_scout_report(self, msg: Block) -> None:
-        self.reported_blocks.append(msg)
+        """Record a scout-reported block; bind its type to a stockpile if not yet bound."""
+        block = msg
+        if block.type not in self.type_to_stockpile:
+            tag_id = self._choose_closest_unassigned_stockpile(
+                block.pose.pose.position.x,
+                block.pose.pose.position.y,
+            )
+            if tag_id is None:
+                self.get_logger().error(
+                    f"No unassigned stockpile available for block type {block.type} "
+                    f"(known stockpiles: {len(self.stockpiles)}, "
+                    f"bindings: {self.type_to_stockpile}); queueing block."
+                )
+                self.pending_unbound.append(block)
+                return
+            self.type_to_stockpile[block.type] = tag_id
+            self.get_logger().info(f"Bound block type {block.type} -> stockpile tag {tag_id}")
+        self.reported_blocks.append(block)
 
     def send_retrieval_task(self, robot_id: str, block: Block, stockpile: PolygonStamped) -> None:
         client = self._action_clients[robot_id]

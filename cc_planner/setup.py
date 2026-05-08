@@ -28,7 +28,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "planner_node = cc_planner.planner_node:main",
+            "cc_planner = cc_planner.planner_node:main",
         ],
     },
 )
