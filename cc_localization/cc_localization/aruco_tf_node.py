@@ -11,9 +11,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 from ament_index_python.packages import get_package_share_directory
+from cc_interfaces.msg import Stockpiles
 
 import rclpy
-from cc_interfaces.msg import Stockpiles
 from geometry_msgs.msg import Point, Point32, Polygon, TransformStamped
 from nav_msgs.msg import OccupancyGrid
 from rclpy.node import Node
@@ -247,17 +247,24 @@ class ArucoTfNode(Node):
         return grid
 
     def publish_stockpiles(self, stockpile_rects: dict[int, np.ndarray]) -> None:
-        """Publish per-stockpile polygons in tag-id order, empty when not detected this tick."""
+        """
+        Publish stockpiles with parallel ids and polygons arrays.
+
+        Emit polygons for stockpiles detected this tick, in sorted tag-id order.
+        ids[i] is the aruco tag id whose footprint is polygons[i].
+        """
         if not stockpile_rects:
             return
         msg = Stockpiles()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = self.world_frame
         for tid in self.sorted_stockpile_ids:
-            poly = Polygon()
             rect = stockpile_rects.get(tid)
-            if rect is not None:
-                poly.points = [Point32(x=float(x), y=float(y), z=0.0) for x, y in rect]
+            if rect is None:
+                continue
+            poly = Polygon()
+            poly.points = [Point32(x=float(x), y=float(y), z=0.0) for x, y in rect]
+            msg.ids.append(tid)
             msg.polygons.append(poly)
         self.stockpile_pub.publish(msg)
 
