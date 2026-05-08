@@ -1,0 +1,16 @@
+robots:
+  - identifier: scout_1
+    aruco_tag_id: 0
+    capability: scout
+  - identifier: scout_2
+    aruco_tag_id: 1
+    capability: scout
+  - identifier: retriever_1
+    aruco_tag_id: 2
+    capability: retriever
+  - identifier: retriever_2
+    aruco_tag_id: 3
+    capability: retriever
+  - identifier: manipulator_1
+    aruco_tag_id: 4
+    capability: manipulator
