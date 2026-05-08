@@ -30,7 +30,7 @@ setup(
     entry_points={
         "console_scripts": [
             "aruco_detect = cc_localization.aruco_detect:main",
-            "aruco_tf_node = cc_localization.aruco_tf_node:main",
+            "cc_localization = cc_localization.cc_localization_node:main",
         ],
     },
 )

@@ -25,7 +25,7 @@ def generate_launch_description() -> LaunchDescription:
             ),
             Node(
                 package="cc_localization",
-                executable="aruco_tf_node",
+                executable="cc_localization",
                 name="cc_localization",
                 output="screen",
             ),
