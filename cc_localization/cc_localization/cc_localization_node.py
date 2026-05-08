@@ -11,7 +11,6 @@ from pathlib import Path
 import cv2
 import numpy as np
 from ament_index_python.packages import get_package_share_directory
-from cc_interfaces.msg import Stockpiles
 
 import rclpy
 from geometry_msgs.msg import Point, Point32, Polygon, TransformStamped
@@ -19,6 +18,8 @@ from nav_msgs.msg import OccupancyGrid
 from rclpy.node import Node
 from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker, MarkerArray
+
+from cc_interfaces.msg import Stockpiles
 
 # Hard-coded tag ids per frame. Convention: counter-clockwise starting at origin
 # (origin -> +X -> +X+Y -> +Y). Edit here if the printed tags change.
