@@ -29,6 +29,7 @@ setup(
     entry_points={
         "console_scripts": [
             "cc_planner = cc_planner.planner_node:main",
+            "fake_retriever = cc_planner.fake_retriever:main",
         ],
     },
 )

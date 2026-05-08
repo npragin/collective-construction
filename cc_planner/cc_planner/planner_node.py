@@ -7,11 +7,15 @@ import yaml
 from ament_index_python.packages import get_package_share_directory
 
 import rclpy
+import rclpy.duration
+import rclpy.time
+import tf2_ros
 from cc_interfaces.action import ManipulationTask, RetrievalTask
 from cc_interfaces.msg import Block, Stockpiles
 from geometry_msgs.msg import Polygon, PolygonStamped
 from rclpy.action import ActionClient
 from rclpy.node import Node
+from tf2_ros import TransformException
 
 
 def _polygon_centroid_xy(polygon: Polygon) -> tuple[float, float]:
@@ -34,14 +38,23 @@ class PlannerNode(Node):
         self.declare_parameter("scout_report_topic", "scout_report")
         self.declare_parameter("retrieval_action_name", "retrieval_task")
         self.declare_parameter("manipulation_action_name", "manipulation_task")
-        self.declare_parameter("action_server_timeout", 5.0)
 
         scout_report_topic = self.get_parameter("scout_report_topic").get_parameter_value().string_value
         self._retrieval_action_name = self.get_parameter("retrieval_action_name").get_parameter_value().string_value
         self._manipulation_action_name = (
             self.get_parameter("manipulation_action_name").get_parameter_value().string_value
         )
-        self._action_server_timeout = self.get_parameter("action_server_timeout").get_parameter_value().double_value
+
+        self.declare_parameter("world_frame", "world")
+        self.declare_parameter("tf_lookup_timeout", 0.1)
+        self.declare_parameter("robot_frame_prefix", "aruco_")
+
+        self._world_frame = self.get_parameter("world_frame").get_parameter_value().string_value
+        self._tf_lookup_timeout = self.get_parameter("tf_lookup_timeout").get_parameter_value().double_value
+        self._robot_frame_prefix = self.get_parameter("robot_frame_prefix").get_parameter_value().string_value
+
+        self._tf_buffer = tf2_ros.Buffer()
+        self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
         config_path = Path(get_package_share_directory("cc_planner")) / "config" / "robots.yaml"
         with config_path.open() as f:
@@ -49,8 +62,9 @@ class PlannerNode(Node):
 
         self.robot_status: dict[str, RobotStatus] = {robot["identifier"]: RobotStatus.IDLE for robot in robots}
         self.robot_capabilities: dict[str, str] = {robot["identifier"]: robot["capability"] for robot in robots}
+        self.robot_aruco_ids: dict[str, int] = {robot["identifier"]: int(robot["aruco_tag_id"]) for robot in robots}
 
-        # Every stockpile the planner has ever seen, keyed by aruco tag id.
+        # Aruco tag id -> polygon
         # Polygon updates in place when re-detected; entries are never removed.
         self.stockpiles: dict[int, PolygonStamped] = {}
         # Block type (Block.TYPE_*) -> tag id of the bound stockpile. Permanent once set.
@@ -59,6 +73,10 @@ class PlannerNode(Node):
         self.reported_blocks: list[Block] = []
         # Reported blocks whose type couldn't be bound (no unassigned stockpile).
         self.pending_unbound: list[Block] = []
+        # robot_id -> Block currently being retrieved
+        self.in_flight: dict[str, Block] = {}
+        # stockpile tag id -> delivered block count; initialized in _on_stockpiles
+        self.stockpile_counts: dict[int, int] = {}
 
         self._stockpiles_sub = self.create_subscription(Stockpiles, "stockpile_polygons", self._on_stockpiles, 10)
         self._scout_subs = []
@@ -83,6 +101,7 @@ class PlannerNode(Node):
             tid = int(tag_id)
             if tid not in self.stockpiles:
                 new_ids = True
+                self.stockpile_counts[tid] = 0
             self.stockpiles[tid] = PolygonStamped(header=msg.header, polygon=polygon)
         if new_ids and self.pending_unbound:
             self._drain_pending_unbound()
@@ -107,6 +126,7 @@ class PlannerNode(Node):
             self.get_logger().info(f"(drain) Bound block type {block.type} -> stockpile tag {tag_id}")
             self.reported_blocks.append(block)
         self.pending_unbound = remaining
+        self._try_assign_retrievers()
 
     def _choose_closest_unassigned_stockpile(self, x: float, y: float) -> int | None:
         """
@@ -145,46 +165,142 @@ class PlannerNode(Node):
             self.type_to_stockpile[block.type] = tag_id
             self.get_logger().info(f"Bound block type {block.type} -> stockpile tag {tag_id}")
         self.reported_blocks.append(block)
+        self._try_assign_retrievers()
 
-    def send_retrieval_task(self, robot_id: str, block: Block, stockpile: PolygonStamped) -> None:
-        client = self._action_clients[robot_id]
-        if not client.wait_for_server(timeout_sec=self._action_server_timeout):
-            self.get_logger().error(f"Retrieval action server for {robot_id} unavailable")
+    def _try_assign_retrievers(self) -> None:
+        """
+        Pair queued blocks with idle retrievers.
+
+        Block order is FIFO over reported_blocks. For each block, the idle retriever
+        with the smallest squared-Euclidean xy distance is chosen. Retrievers whose
+        TF pose cannot be resolved this round are skipped and reconsidered on the
+        next trigger.
+        """
+        idle = [
+            r
+            for r, s in self.robot_status.items()
+            if s is RobotStatus.IDLE
+            and self.robot_capabilities[r] == "retriever"
+            and self._action_clients[r].server_is_ready()
+        ]
+        if not idle or not self.reported_blocks:
             return
+
+        poses: dict[str, tuple[float, float]] = {}
+        for robot_id in idle:
+            xy = self._lookup_robot_xy(robot_id)
+            if xy is not None:
+                poses[robot_id] = xy
+
+        remaining: list[Block] = []
+        for block in self.reported_blocks:
+            if not poses:
+                remaining.append(block)
+                continue
+            bx = block.pose.pose.position.x
+            by = block.pose.pose.position.y
+            robot_id = min(
+                poses,
+                key=lambda r: (poses[r][0] - bx) ** 2 + (poses[r][1] - by) ** 2,
+            )
+            stockpile = self.stockpiles[self.type_to_stockpile[block.type]]
+            if not self._send_retrieval_task(robot_id, block, stockpile):
+                remaining.append(block)
+            del poses[robot_id]
+        self.reported_blocks = remaining
+
+    def _lookup_robot_xy(self, robot_id: str) -> tuple[float, float] | None:
+        """
+        Resolve a robot's xy in the world frame via TF.
+
+        Returns None when the lookup fails (frame missing, transform stale, etc.);
+        callers treat that robot as unavailable for the current pass.
+        """
+        aruco_id = self.robot_aruco_ids[robot_id]
+        source_frame = f"{self._robot_frame_prefix}{aruco_id}"
+        try:
+            tf = self._tf_buffer.lookup_transform(
+                self._world_frame,
+                source_frame,
+                rclpy.time.Time(),
+                timeout=rclpy.duration.Duration(seconds=self._tf_lookup_timeout),
+            )
+        except TransformException as exc:
+            self.get_logger().debug(f"TF lookup {self._world_frame}<-{source_frame} failed: {exc}")
+            return None
+        t = tf.transform.translation
+        return (t.x, t.y)
+
+    def _send_retrieval_task(self, robot_id: str, block: Block, stockpile: PolygonStamped) -> bool:
+        """Dispatch a retrieval goal. Returns True on send, False if the server is not ready."""
+        client = self._action_clients[robot_id]
+        if not client.server_is_ready():
+            self.get_logger().error(f"Retrieval action server for {robot_id} unavailable")
+            return False
 
         goal = RetrievalTask.Goal()
         goal.block = block
         goal.stockpile = stockpile
 
         send_future = client.send_goal_async(goal)
-        send_future.add_done_callback(lambda f: self._on_goal_response(f, robot_id))
+        send_future.add_done_callback(lambda f: self._on_retrieval_goal_response(f, robot_id))
+        self.in_flight[robot_id] = block
         self.robot_status[robot_id] = RobotStatus.TASKED
+        return True
 
-    def send_manipulation_task(self, robot_id: str, block: Block, stockpile: PolygonStamped) -> None:
-        client = self._action_clients[robot_id]
-        if not client.wait_for_server(timeout_sec=self._action_server_timeout):
-            self.get_logger().error(f"Manipulation action server for {robot_id} unavailable")
+    def _on_retrieval_goal_response(self, future, robot_id: str) -> None:
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().warn(f"Retrieval goal rejected by {robot_id}; requeueing block")
+            block = self.in_flight.pop(robot_id)
+            self.reported_blocks.append(block)
+            self.robot_status[robot_id] = RobotStatus.IDLE
+            self._try_assign_retrievers()
             return
+        goal_handle.get_result_async().add_done_callback(lambda f: self._on_retrieval_task_result(f, robot_id))
+
+    def _on_retrieval_task_result(self, future, robot_id: str) -> None:
+        result = future.result().result
+        block = self.in_flight.pop(robot_id)
+        if result.success:
+            tid = self.type_to_stockpile[block.type]
+            self.stockpile_counts[tid] += 1
+            self.get_logger().info(
+                f"{robot_id} delivered block type {block.type} -> stockpile {tid} (count={self.stockpile_counts[tid]})"
+            )
+        else:
+            self.get_logger().warn(f"{robot_id} retrieval failed; requeueing block")
+            self.reported_blocks.append(block)
+        self.robot_status[robot_id] = RobotStatus.IDLE
+        self._try_assign_retrievers()
+
+    def send_manipulation_task(self, robot_id: str, block: Block, stockpile: PolygonStamped) -> bool:
+        """Dispatch a manipulation goal. Returns True on send, False if the server is not ready."""
+        client = self._action_clients[robot_id]
+        if not client.server_is_ready():
+            self.get_logger().error(f"Manipulation action server for {robot_id} unavailable")
+            return False
 
         goal = ManipulationTask.Goal()
         goal.block = block
         goal.stockpile = stockpile
 
         send_future = client.send_goal_async(goal)
-        send_future.add_done_callback(lambda f: self._on_goal_response(f, robot_id))
+        send_future.add_done_callback(lambda f: self._on_manipulation_goal_response(f, robot_id))
         self.robot_status[robot_id] = RobotStatus.TASKED
+        return True
 
-    def _on_goal_response(self, future, robot_id: str) -> None:
+    def _on_manipulation_goal_response(self, future, robot_id: str) -> None:
         goal_handle = future.result()
         if not goal_handle.accepted:
-            self.get_logger().warn(f"Goal rejected by {robot_id}")
+            self.get_logger().warn(f"Manipulation goal rejected by {robot_id}")
             self.robot_status[robot_id] = RobotStatus.IDLE
             return
-        goal_handle.get_result_async().add_done_callback(lambda f: self._on_task_result(f, robot_id))
+        goal_handle.get_result_async().add_done_callback(lambda f: self._on_manipulation_task_result(f, robot_id))
 
-    def _on_task_result(self, future, robot_id: str) -> None:
+    def _on_manipulation_task_result(self, future, robot_id: str) -> None:
         result = future.result().result
-        self.get_logger().info(f"{robot_id} task complete: success={result.success}")
+        self.get_logger().info(f"{robot_id} manipulation task complete: success={result.success}")
         self.robot_status[robot_id] = RobotStatus.IDLE
 
 
