@@ -11,6 +11,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from ament_index_python.packages import get_package_share_directory
+from cc_interfaces.msg import Stockpiles
 
 import rclpy
 from geometry_msgs.msg import Point, Point32, Polygon, TransformStamped
