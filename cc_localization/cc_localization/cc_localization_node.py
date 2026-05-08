@@ -91,7 +91,7 @@ def rotation_matrix_to_quaternion(R: np.ndarray) -> tuple[float, float, float, f
     return float(x), float(y), float(z), float(w)
 
 
-class ArucoTfNode(Node):
+class CcLocalizationNode(Node):
     """Detect ArUco frames and broadcast world/inner transforms on tf."""
 
     def __init__(self) -> None:
@@ -100,13 +100,13 @@ class ArucoTfNode(Node):
 
         self.declare_parameter("device_id", 42)
         self.declare_parameter("marker_size", 0.15)
-        self.declare_parameter("world_length", 1.35)
-        self.declare_parameter("world_width", 0.885)
-        self.declare_parameter("inner_length", 0.41)
-        self.declare_parameter("inner_width", 0.54)
-        self.declare_parameter("stockpile_length", 0.30)
-        self.declare_parameter("stockpile_width", 0.30)
-        self.declare_parameter("koz_mask_resolution", 0.05)
+        self.declare_parameter("world_length", 1.27)
+        self.declare_parameter("world_width", 1.45)
+        self.declare_parameter("inner_length", 0.395)
+        self.declare_parameter("inner_width", 0.36)
+        self.declare_parameter("stockpile_length", 0.15)
+        self.declare_parameter("stockpile_width", 0.15)
+        self.declare_parameter("koz_mask_resolution", 0.01)
         self.declare_parameter("world_frame", "world")
         self.declare_parameter("inner_frame", "build")
         self.declare_parameter("camera_frame", "camera")
@@ -319,9 +319,9 @@ class ArucoTfNode(Node):
 
 
 def main() -> None:
-    """Spin the ArucoTfNode until interrupted."""
+    """Spin the CcLocalizationNode until interrupted."""
     rclpy.init()
-    node = ArucoTfNode()
+    node = CcLocalizationNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
