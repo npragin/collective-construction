@@ -8,8 +8,8 @@ from ament_index_python.packages import get_package_share_directory
 
 import rclpy
 from cc_interfaces.action import ManipulationTask, RetrievalTask
-from cc_interfaces.msg import Block
-from geometry_msgs.msg import PolygonStamped
+from cc_interfaces.msg import Block, Stockpiles
+from geometry_msgs.msg import Polygon, PolygonStamped
 from rclpy.action import ActionClient
 from rclpy.node import Node
 
@@ -42,6 +42,8 @@ class PlannerNode(Node):
         self.robot_status: dict[str, RobotStatus] = {robot["identifier"]: RobotStatus.IDLE for robot in robots}
 
         self.reported_blocks: list[Block] = []
+        self.stockpile_polygons: list[Polygon] = []
+        self._stockpiles_sub = self.create_subscription(Stockpiles, "stockpile_polygons", self._on_stockpiles, 10)
         self._scout_subs = []
         self._action_clients: dict[str, ActionClient] = {}
         for robot in robots:
@@ -58,6 +60,14 @@ class PlannerNode(Node):
             elif capability == "manipulator":
                 action_name = f"{robot_id}/{self._manipulation_action_name}"
                 self._action_clients[robot_id] = ActionClient(self, ManipulationTask, action_name)
+
+    def _on_stockpiles(self, msg: Stockpiles) -> None:
+        if not self.stockpile_polygons:
+            self.stockpile_polygons = list(msg.polygons)
+            return
+        for i, poly in enumerate(msg.polygons):
+            if poly.points:
+                self.stockpile_polygons[i] = poly
 
     def _on_scout_report(self, msg: Block) -> None:
         self.reported_blocks.append(msg)
