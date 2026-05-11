@@ -10,3 +10,6 @@ log/
 
 # Virtual environments
 .venv
+
+# generated files
+.vscode/

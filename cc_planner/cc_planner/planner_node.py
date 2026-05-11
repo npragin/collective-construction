@@ -12,7 +12,7 @@ import rclpy.time
 import tf2_ros
 from cc_interfaces.action import ManipulationTask, RetrievalTask
 from cc_interfaces.msg import Block, Stockpiles
-from geometry_msgs.msg import Polygon, PolygonStamped
+from geometry_msgs.msg import Polygon, PolygonStamped, PoseStamped
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from tf2_ros import TransformException
@@ -78,6 +78,15 @@ class PlannerNode(Node):
         # stockpile tag id -> delivered block count; initialized in _on_stockpiles
         self.stockpile_counts: dict[int, int] = {}
 
+        # RW: robot_id -> dependency-graph block id currently being placed
+        self.manipulation_in_flight: dict[str, str] = {}
+
+        # RW: Placement dependency graph for manipulator scheduling.
+        self.dependency_graph: dict[str, dict[str, object]] = {}
+        self.block_order: list[str] = []
+        self.block_counter = 0
+
+
         self._stockpiles_sub = self.create_subscription(Stockpiles, "stockpile_polygons", self._on_stockpiles, 10)
         self._scout_subs = []
         self._action_clients: dict[str, ActionClient] = {}
@@ -93,6 +102,103 @@ class PlannerNode(Node):
             elif capability == "manipulator":
                 action_name = f"{robot_id}/{self._manipulation_action_name}"
                 self._action_clients[robot_id] = ActionClient(self, ManipulationTask, action_name)
+
+
+    # RW: Pre-seed planner with planned structure from YAML file for manipulator scheduling
+        self.declare_parameter("structure_file", "")
+        structure_file = self.get_parameter("structure_file").get_parameter_value().string_value
+        if structure_file:
+            try:
+                sf_path = Path(structure_file)
+                with sf_path.open() as sf:
+                    placements = yaml.safe_load(sf)
+                if isinstance(placements, list):
+                     # RW: Populate dependency graph from user-provided structure
+                    self.initialize_structure(placements)
+                    self.get_logger().info(f"Loaded structure ({len(placements)} blocks) from {structure_file}")
+                else:
+                    self.get_logger().warn(f"Structure file {structure_file} did not contain a list; ignoring")
+            except Exception as exc:  # pragma: no cover - best-effort runtime load
+                self.get_logger().error(f"Failed to load structure file {structure_file}: {exc}")
+
+    def initialize_structure(self, block_placements: list[dict]) -> None:
+        """RW: Load the planned structure for manipulator scheduling."""
+        self.dependency_graph = {}
+        self.block_order = []
+
+        for index, placement in enumerate(block_placements):
+            block_id = placement.get("block_id") or f"block_{index}"
+            self.dependency_graph[block_id] = {
+                "block_type": placement["block_type"],
+                "parent_ids": list(placement.get("parent_ids", [])),
+                "placed": False,
+                "in_progress": False,
+            }
+            self.block_order.append(block_id)
+
+    def _get_placeable_blocks(self) -> list[str]:
+        """RW: Find blocks ready for manipulator assignment."""
+        placeable: list[str] = []
+        for block_id in self.block_order:
+            node = self.dependency_graph.get(block_id)
+            if node is None or node["placed"] or node["in_progress"]:
+                continue
+            parent_ids = node["parent_ids"]
+            if all(self.dependency_graph[parent_id]["placed"] for parent_id in parent_ids):
+                placeable.append(block_id)
+        return placeable
+
+    def _restore_stockpile_for_block_type(self, block_type: int) -> None:
+        """RW: Restore stockpile when placement goal is rejected or fails."""
+        stockpile_tag = self.type_to_stockpile.get(block_type)
+        if stockpile_tag is not None:
+            self.stockpile_counts[stockpile_tag] += 1
+
+    def allocate_manipulator_tasks(self) -> None:
+        """RW: Assign ready block to idle manipulator and consume stock."""
+        if not self.dependency_graph:
+            return
+
+        idle_manipulators = [
+            robot_id
+            for robot_id, status in self.robot_status.items()
+            if status is RobotStatus.IDLE and self.robot_capabilities.get(robot_id) == "manipulator"
+        ]
+        if not idle_manipulators:
+            return
+
+        for robot_id in idle_manipulators:
+            assigned = False
+            for block_id in self._get_placeable_blocks():
+                block_node = self.dependency_graph[block_id]
+                block_type = int(block_node["block_type"])
+                stockpile_tag = self.type_to_stockpile.get(block_type)
+                if stockpile_tag is None or self.stockpile_counts.get(stockpile_tag, 0) <= 0:
+                    continue
+
+                stockpile = self.stockpiles.get(stockpile_tag)
+                if stockpile is None:
+                    continue
+
+                block = Block()
+                block.type = block_type
+
+                self.dependency_graph[block_id]["in_progress"] = True
+                self.stockpile_counts[stockpile_tag] -= 1
+                self.manipulation_in_flight[robot_id] = block_id
+
+                if not self.send_manipulation_task(robot_id, block, stockpile):
+                    self.manipulation_in_flight.pop(robot_id, None)
+                    self.dependency_graph[block_id]["in_progress"] = False
+                    self._restore_stockpile_for_block_type(block_type)
+                    continue
+
+                assigned = True
+                break
+
+            if not assigned:
+                self.get_logger().debug(f"No manipulator task available for {robot_id}")
+
 
     def _on_stockpiles(self, msg: Stockpiles) -> None:
         """Upsert detected stockpiles by tag id; drain pending blocks if any new ids appeared."""
@@ -268,6 +374,10 @@ class PlannerNode(Node):
             self.get_logger().info(
                 f"{robot_id} delivered block type {block.type} -> stockpile {tid} (count={self.stockpile_counts[tid]})"
             )
+            
+            # RW: Start placement task after retrieval adds stock
+            self.allocate_manipulator_tasks()
+
         else:
             self.get_logger().warn(f"{robot_id} retrieval failed; requeueing block")
             self.reported_blocks.append(block)
@@ -285,6 +395,20 @@ class PlannerNode(Node):
         goal.block = block
         goal.stockpile = stockpile
 
+        # RW: Calculate target pose: centroid of stockpile polygon projected to z=0
+        try:
+            cx, cy = _polygon_centroid_xy(stockpile.polygon)
+            ps = PoseStamped()
+            ps.header = stockpile.header
+            ps.pose.position.x = float(cx)
+            ps.pose.position.y = float(cy)
+            ps.pose.position.z = 0.0
+            goal.target_pose = ps
+        except Exception:
+            # RW: Best-effort only; manipulators fall back if centroid fails
+            pass
+
+
         send_future = client.send_goal_async(goal)
         send_future.add_done_callback(lambda f: self._on_manipulation_goal_response(f, robot_id))
         self.robot_status[robot_id] = RobotStatus.TASKED
@@ -294,15 +418,44 @@ class PlannerNode(Node):
         goal_handle = future.result()
         if not goal_handle.accepted:
             self.get_logger().warn(f"Manipulation goal rejected by {robot_id}")
+
+           # RW: Mark block as not in-progress to allow reassignment, and restore stock since it wasn't picked
+            block_id = self.manipulation_in_flight.pop(robot_id, None)
+            if block_id is not None:
+                block_node = self.dependency_graph.get(block_id)
+                if block_node is not None:
+                    block_node["in_progress"] = False
+                    self._restore_stockpile_for_block_type(int(block_node["block_type"]))
+            
+
             self.robot_status[robot_id] = RobotStatus.IDLE
+            
+            self.allocate_manipulator_tasks()
+
             return
         goal_handle.get_result_async().add_done_callback(lambda f: self._on_manipulation_task_result(f, robot_id))
 
     def _on_manipulation_task_result(self, future, robot_id: str) -> None:
         result = future.result().result
-        self.get_logger().info(f"{robot_id} manipulation task complete: success={result.success}")
-        self.robot_status[robot_id] = RobotStatus.IDLE
 
+        # RW: Update dependency graph and stockpile on manipulation result; then trigger next manipulator assignment pass
+        block_id = self.manipulation_in_flight.pop(robot_id, None)
+        if block_id is not None:
+            block_node = self.dependency_graph.get(block_id)
+            if block_node is not None:
+                if result.success:
+                    block_node["placed"] = True
+                    block_node["in_progress"] = False
+                    # RW: Mark block as placed to enable dependent blocks
+                    self.get_logger().info(f"{robot_id} placed block {block_id}")
+                else:
+                    block_node["in_progress"] = False
+                    self._restore_stockpile_for_block_type(int(block_node["block_type"]))
+                    self.get_logger().warn(f"{robot_id} manipulation failed for block {block_id}")
+        else:
+            self.get_logger().info(f"{robot_id} manipulation task complete: success={result.success}")
+        self.robot_status[robot_id] = RobotStatus.IDLE
+        self.allocate_manipulator_tasks()
 
 def main() -> None:
     rclpy.init()
