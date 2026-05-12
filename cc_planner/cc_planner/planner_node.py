@@ -16,6 +16,7 @@ from geometry_msgs.msg import Polygon, PolygonStamped, PoseStamped
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from tf2_ros import TransformException
+from collections import deque
 
 
 def _polygon_centroid_xy(polygon: Polygon) -> tuple[float, float]:
@@ -84,10 +85,10 @@ class PlannerNode(Node):
         # RW: Placement dependency graph for manipulator scheduling.
         self.dependency_graph: dict[str, dict[str, object]] = {}
         self.block_order: list[str] = []
-        self.ready_blocks_by_type: dict[int, list[str]] = {
-            Block.TYPE_A: [],
-            Block.TYPE_B: [],
-            Block.TYPE_C: [],
+        self.ready_blocks_by_type: dict[int, deque[str]] = {
+            Block.TYPE_A: deque(),
+            Block.TYPE_B: deque(),
+            Block.TYPE_C: deque(),
         }
         self.block_counter = 0
 
@@ -224,9 +225,9 @@ class PlannerNode(Node):
             if stockpile_tag is None or self.stockpile_counts.get(stockpile_tag, 0) <= 0:
                 continue
 
-            queue = self.ready_blocks_by_type.setdefault(block_type, [])
+            queue = self.ready_blocks_by_type.setdefault(block_type, deque())
             while queue:
-                block_id = queue.pop(0)
+                block_id = queue.popleft()
                 node = self.dependency_graph.get(block_id)
                 if node is None or node["placed"] or node["in_progress"]:
                     continue
@@ -281,13 +282,13 @@ class PlannerNode(Node):
             stockpile_tag = self.type_to_stockpile.get(block_type)
             if stockpile_tag is None:
                 block_node["in_progress"] = False
-                self.ready_blocks_by_type.setdefault(block_type, []).insert(0, block_id)
+                self.ready_blocks_by_type.setdefault(block_type, deque()).appendleft(block_id)
                 continue
 
             stockpile = self.stockpiles.get(stockpile_tag)
             if stockpile is None:
                 block_node["in_progress"] = False
-                self.ready_blocks_by_type.setdefault(block_type, []).insert(0, block_id)
+                self.ready_blocks_by_type.setdefault(block_type, deque()).appendleft(block_id)
                 continue
 
             # Reserve stock immediately so two manipulators cannot consume the same count.
@@ -304,7 +305,7 @@ class PlannerNode(Node):
                 self.manipulation_in_flight.pop(robot_id, None)
                 block_node["in_progress"] = False
                 self._restore_stockpile_for_block_type(block_type)
-                self.ready_blocks_by_type.setdefault(block_type, []).insert(0, block_id)
+                self.ready_blocks_by_type.setdefault(block_type, deque()).appendleft(block_id)
                 continue
 
     def _on_stockpiles(self, msg: Stockpiles) -> None:
@@ -537,7 +538,7 @@ class PlannerNode(Node):
                     block_type = int(block_node["block_type"])
                     self._restore_stockpile_for_block_type(block_type)
                     if not block_node["placed"] and int(block_node["remaining_parents"]) == 0:
-                        self.ready_blocks_by_type.setdefault(block_type, []).insert(0, block_id)
+                        self.ready_blocks_by_type.setdefault(block_type, deque()).appendleft(block_id)
 
 
             self.robot_status[robot_id] = RobotStatus.IDLE
@@ -571,7 +572,7 @@ class PlannerNode(Node):
 
                         if int(child_node["remaining_parents"]) == 0 and not child_node["placed"]:
                             child_type = int(child_node["block_type"])
-                            self.ready_blocks_by_type.setdefault(child_type, []).append(child_id)
+                            self.ready_blocks_by_type.setdefault(child_type, deque()).append(child_id)
                             self.get_logger().info(f"Block {child_id} is now dependency-ready")
 
                     self.get_logger().info(f"{robot_id} placed block {block_id}")
@@ -580,7 +581,7 @@ class PlannerNode(Node):
                     block_type = int(block_node["block_type"])
                     self._restore_stockpile_for_block_type(block_type)
                     if int(block_node["remaining_parents"]) == 0:
-                        self.ready_blocks_by_type.setdefault(block_type, []).insert(0, block_id)
+                        self.ready_blocks_by_type.setdefault(block_type, deque()).appendleft(block_id)
                     self.get_logger().warn(f"{robot_id} manipulation failed for block {block_id}")
         else:
             self.get_logger().info(f"{robot_id} manipulation task complete: success={result.success}")
