@@ -12,9 +12,10 @@ from launch_ros.actions import Node
 
 def generate_launch_description() -> LaunchDescription:
     pkg_share = Path(get_package_share_directory("cc_localization"))
-    default_rviz = str(pkg_share / "rviz" / "aruco_tf.rviz")
+    default_rviz = str(pkg_share / "rviz" / "scout.rviz")
 
     rviz_config = LaunchConfiguration("rviz_config")
+    on_sim = LaunchConfiguration("on_sim")
 
     return LaunchDescription(
         [
@@ -23,11 +24,17 @@ def generate_launch_description() -> LaunchDescription:
                 default_value=default_rviz,
                 description="Path to the RViz config file.",
             ),
+            DeclareLaunchArgument(
+                "on_sim",
+                default_value="0",
+                description="Run in simulation mode (no camera).",
+            ),
             Node(
                 package="cc_localization",
                 executable="cc_localization",
                 name="cc_localization",
                 output="screen",
+                parameters=[{"on_sim": on_sim}],
             ),
             Node(
                 package="rviz2",

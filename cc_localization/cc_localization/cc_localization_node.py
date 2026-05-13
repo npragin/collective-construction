@@ -100,18 +100,22 @@ class CcLocalizationNode(Node):
 
         self.declare_parameter("device_id", 42)
         self.declare_parameter("marker_size", 0.15)
-        self.declare_parameter("world_length", 1.27)
-        self.declare_parameter("world_width", 1.45)
-        self.declare_parameter("inner_length", 0.395)
-        self.declare_parameter("inner_width", 0.36)
-        self.declare_parameter("stockpile_length", 0.15)
+        self.declare_parameter("world_length", 2.0)
+        self.declare_parameter("world_width", 1.0)
+        # build area
+        self.declare_parameter("inner_length", 0.3)
+        self.declare_parameter("inner_width", 0.3)
+
+        self.declare_parameter("stockpile_length", 0.1)
         self.declare_parameter("stockpile_width", 0.15)
         self.declare_parameter("koz_mask_resolution", 0.01)
         self.declare_parameter("world_frame", "world")
         self.declare_parameter("inner_frame", "build")
         self.declare_parameter("camera_frame", "camera")
         self.declare_parameter("tick_rate_hz", 30.0)
+        self.declare_parameter("on_sim", 0)
 
+        self.on_sim = self.get_parameter('on_sim').get_parameter_value().integer_value
         device_id = self.get_parameter("device_id").get_parameter_value().integer_value
         self.marker_size = self.get_parameter("marker_size").get_parameter_value().double_value
         world_length = self.get_parameter("world_length").get_parameter_value().double_value
@@ -142,9 +146,13 @@ class CcLocalizationNode(Node):
         self.detector = cv2.aruco.ArucoDetector(
             cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50),
         )
-        self.cap = cv2.VideoCapture(device_id)
-        if not self.cap.isOpened():
-            raise RuntimeError(f"Failed to open video device {device_id}")
+        self.get_logger().info(f"on_sim={self.on_sim}")
+        if not self.on_sim:
+            self.cap = cv2.VideoCapture(device_id)
+            if not self.cap.isOpened():
+                raise RuntimeError(f"Failed to open video device {device_id}")
+        else:
+            self.cap = None
 
         self.broadcaster = TransformBroadcaster(self)
         self.marker_pub = self.create_publisher(MarkerArray, "workspace_markers", 1)
@@ -153,7 +161,8 @@ class CcLocalizationNode(Node):
 
     def destroy_node(self) -> None:
         """Release the camera before standard node teardown."""
-        self.cap.release()
+        if self.cap is not None:
+            self.cap.release()
         super().destroy_node()
 
     def solve_frame(
@@ -244,78 +253,125 @@ class CcLocalizationNode(Node):
 
     def tick(self) -> None:
         """Read a frame, solve PnP for both frames, and broadcast available transforms."""
-        ret, frame = self.cap.read()
-        if not ret:
-            return
+        if not self.on_sim:
+            ret, frame = self.cap.read()
+            if not ret:
+                return
+            corners, ids, _ = self.detector.detectMarkers(frame)
+            if ids is None:
+                return
 
-        corners, ids, _ = self.detector.detectMarkers(frame)
-        if ids is None:
-            return
-        ids_flat = ids.flatten()
+            ids_flat = ids.flatten()
+            """
+            self.solve_frame: Solve PnP for a frame given its corner-tag layout. Returns (ok, rvec, tvec).
+            In other words, (exact shape of aruco tag, loc in image in camera frame) -> fun: PnP solver -> (rotation and translation of aruco tag in camera frame)
+            """
+            outer_ok, rvec_w, tvec_w = self.solve_frame(self.outer_corners, ids_flat, corners)
+            inner_ok, rvec_i, tvec_i = self.solve_frame(self.inner_corners, ids_flat, corners)
 
-        outer_ok, rvec_w, tvec_w = self.solve_frame(self.outer_corners, ids_flat, corners)
-        inner_ok, rvec_i, tvec_i = self.solve_frame(self.inner_corners, ids_flat, corners)
+            transforms = []
+            rects: list[np.ndarray] = []
+            stockpile_ids: list[int] = []
 
-        transforms = []
-        rects: list[np.ndarray] = []
-        stockpile_ids: list[int] = []
+            if not outer_ok:
+                return
 
-        if not outer_ok:
-            return
+            R_wc = cv2.Rodrigues(rvec_w)[0]
+            R_cw = R_wc.T
+            t_w = tvec_w.flatten()
 
-        R_wc = cv2.Rodrigues(rvec_w)[0]
-        R_cw = R_wc.T
-        t_w = tvec_w.flatten()
+            # world -> camera: invert the outer PnP.
+            transforms.append(self.make_transform(self.world_frame, self.camera_frame, R_cw, -R_cw @ t_w))
 
-        # world -> camera: invert the outer PnP.
-        transforms.append(self.make_transform(self.world_frame, self.camera_frame, R_cw, -R_cw @ t_w))
+            # world -> inner: compose outer^-1 with inner, then flatten to (x, y, yaw).
+            if inner_ok:
+                R_wi = yaw_only(R_cw @ cv2.Rodrigues(rvec_i)[0])
+                t_wi = R_cw @ (tvec_i.flatten() - t_w)
+                t_wi[2] = 0.0
+                transforms.append(self.make_transform(self.world_frame, self.inner_frame, R_wi, t_wi))
+                rects.append(rect_in_world(R_wi[:2, :2], t_wi[:2], *self.inner_dims))
 
-        # world -> inner: compose outer^-1 with inner, then flatten to (x, y, yaw).
-        if inner_ok:
-            R_wi = yaw_only(R_cw @ cv2.Rodrigues(rvec_i)[0])
-            t_wi = R_cw @ (tvec_i.flatten() - t_w)
-            t_wi[2] = 0.0
-            transforms.append(self.make_transform(self.world_frame, self.inner_frame, R_wi, t_wi))
-            rects.append(rect_in_world(R_wi[:2, :2], t_wi[:2], *self.inner_dims))
+            # Per-tag PnP for everything that isn't a frame-defining outer/inner corner.
+            sl, sw = self.stockpile_dims
+            for i, tag_id in enumerate(ids_flat):
+                tid = int(tag_id)
+                if tid in OUTER_TAG_IDS or tid in INNER_TAG_IDS:
+                    continue
+                ok, rvec_t, tvec_t = cv2.solvePnP(
+                    self.tag_local,
+                    corners[i],
+                    self.mtx,
+                    self.dist,
+                    False,
+                    cv2.SOLVEPNP_IPPE_SQUARE,
+                )
+                if not ok:
+                    continue
+                R_wt = yaw_only(R_cw @ cv2.Rodrigues(rvec_t)[0])
+                t_wt = R_cw @ (tvec_t.flatten() - t_w)
+                t_wt[2] = 0.0
+                if tid in STOCKPILE_TAG_IDS:
+                    # Shift origin from tag center to rectangle bottom-left.
+                    t_wt = t_wt - R_wt @ np.array([sl / 2.0, sw / 2.0, 0.0])
+                    transforms.append(self.make_transform(self.world_frame, f"stockpile_{tid}", R_wt, t_wt))
+                    rects.append(rect_in_world(R_wt[:2, :2], t_wt[:2], sl, sw))
+                    stockpile_ids.append(tid)
+                else:
+                    transforms.append(self.make_transform(self.world_frame, f"aruco_{tid}", R_wt, t_wt))
 
-        # Per-tag PnP for everything that isn't a frame-defining outer/inner corner.
-        sl, sw = self.stockpile_dims
-        for i, tag_id in enumerate(ids_flat):
-            tid = int(tag_id)
-            if tid in OUTER_TAG_IDS or tid in INNER_TAG_IDS:
-                continue
-            ok, rvec_t, tvec_t = cv2.solvePnP(
-                self.tag_local,
-                corners[i],
-                self.mtx,
-                self.dist,
-                False,
-                cv2.SOLVEPNP_IPPE_SQUARE,
-            )
-            if not ok:
-                continue
-            R_wt = yaw_only(R_cw @ cv2.Rodrigues(rvec_t)[0])
-            t_wt = R_cw @ (tvec_t.flatten() - t_w)
-            t_wt[2] = 0.0
-            if tid in STOCKPILE_TAG_IDS:
-                # Shift origin from tag center to rectangle bottom-left.
-                t_wt = t_wt - R_wt @ np.array([sl / 2.0, sw / 2.0, 0.0])
-                transforms.append(self.make_transform(self.world_frame, f"stockpile_{tid}", R_wt, t_wt))
-                rects.append(rect_in_world(R_wt[:2, :2], t_wt[:2], sl, sw))
+            self.broadcaster.sendTransform(transforms)
+            self.koz_pub.publish(self.build_koz_grid(rects))
+
+            markers = MarkerArray()
+            markers.markers.append(self.make_rect_marker(self.world_frame, 0, *self.outer_dims, (0.1, 0.9, 0.1)))
+            if inner_ok:
+                markers.markers.append(self.make_rect_marker(self.inner_frame, 1, *self.inner_dims, (0.1, 0.5, 1.0)))
+            for idx, tid in enumerate(stockpile_ids):
+                markers.markers.append(self.make_rect_marker(f"stockpile_{tid}", 100 + idx, sl, sw, (1.0, 0.3, 0.1)))
+            self.marker_pub.publish(markers)
+        
+        else:
+            transforms = []
+            rects: list[np.ndarray] = []
+            stockpile_ids: list[int] = []
+
+            # world -> camera: invert the outer PnP.
+            transforms.append(self.make_transform(self.world_frame, self.camera_frame, np.eye(3), np.array([1.0, -0.2, 0])))
+            # world -> inner: compose outer^-1 with inner, then flatten to (x, y, yaw).
+            R_inner = np.eye(3)
+            t_inner = np.array([0.0, 0.0, 0.0])
+            transforms.append(self.make_transform(self.world_frame, self.inner_frame, R_inner, t_inner))
+            
+            # Build inner area rectangle
+            rects.append(rect_in_world(R_inner[:2, :2], t_inner[:2], *self.inner_dims))
+            
+            # Simulated stockpile positions (hardcoded for sim)
+            sl, sw = self.stockpile_dims
+            stockpile_poses = {
+                8: (np.eye(3), np.array([0.5, 0.0+self.stockpile_dims[1]/2, 0.0])),
+                9: (np.eye(3), np.array([0.5+self.stockpile_dims[0], 0.0+self.stockpile_dims[1]/2, 0.0])),
+                10: (np.eye(3), np.array([0.5+self.stockpile_dims[0]*2, 0.0+self.stockpile_dims[1]/2, 0.0])),
+            }
+            
+            for tid, (R_stock, t_stock) in stockpile_poses.items():
+                # Shift origin from tag center to rectangle bottom-left
+                t_stock_rect = t_stock - R_stock @ np.array([sl / 2.0, sw / 2.0, 0.0])
+                transforms.append(self.make_transform(self.world_frame, f"stockpile_{tid}", R_stock, t_stock_rect))
+                rects.append(rect_in_world(R_stock[:2, :2], t_stock_rect[:2], sl, sw))
                 stockpile_ids.append(tid)
-            else:
-                transforms.append(self.make_transform(self.world_frame, f"aruco_{tid}", R_wt, t_wt))
 
-        self.broadcaster.sendTransform(transforms)
-        self.koz_pub.publish(self.build_koz_grid(rects))
+            self.broadcaster.sendTransform(transforms)
+            self.koz_pub.publish(self.build_koz_grid(rects))
 
-        markers = MarkerArray()
-        markers.markers.append(self.make_rect_marker(self.world_frame, 0, *self.outer_dims, (0.1, 0.9, 0.1)))
-        if inner_ok:
-            markers.markers.append(self.make_rect_marker(self.inner_frame, 1, *self.inner_dims, (0.1, 0.5, 1.0)))
-        for idx, tid in enumerate(stockpile_ids):
-            markers.markers.append(self.make_rect_marker(f"stockpile_{tid}", 100 + idx, sl, sw, (1.0, 0.3, 0.1)))
-        self.marker_pub.publish(markers)
+            markers = MarkerArray()
+            markers.markers.append(self.make_rect_marker(self.world_frame, 0, *self.outer_dims, (0.1, 0.9, 0.1)))
+            inner_ok = True
+            if inner_ok:
+                markers.markers.append(self.make_rect_marker(self.inner_frame, 1, *self.inner_dims, (0.1, 0.5, 1.0)))
+            for idx, tid in enumerate(stockpile_ids):
+                markers.markers.append(self.make_rect_marker(f"stockpile_{tid}", 100 + idx, sl, sw, (1.0, 0.3, 0.1)))
+            self.marker_pub.publish(markers)
+
 
 
 def main() -> None:
