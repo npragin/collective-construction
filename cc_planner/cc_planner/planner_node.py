@@ -11,7 +11,7 @@ import rclpy.duration
 import rclpy.time
 import tf2_ros
 from cc_interfaces.action import ManipulationTask, RetrievalTask
-from cc_interfaces.msg import Block, Stockpiles
+from cc_interfaces.msg import Block, Stockpiles, StructurePlan
 from geometry_msgs.msg import Polygon, PolygonStamped, PoseStamped
 from rclpy.action import ActionClient
 from rclpy.node import Node
@@ -39,12 +39,15 @@ class PlannerNode(Node):
         self.declare_parameter("scout_report_topic", "scout_report")
         self.declare_parameter("retrieval_action_name", "retrieval_task")
         self.declare_parameter("manipulation_action_name", "manipulation_task")
+        self.declare_parameter("structure_plan_topic", "structure_plan")
 
         scout_report_topic = self.get_parameter("scout_report_topic").get_parameter_value().string_value
+        structure_plan_topic = self.get_parameter("structure_plan_topic").get_parameter_value().string_value
         self._retrieval_action_name = self.get_parameter("retrieval_action_name").get_parameter_value().string_value
         self._manipulation_action_name = (
             self.get_parameter("manipulation_action_name").get_parameter_value().string_value
         )
+
 
         self.declare_parameter("world_frame", "world")
         self.declare_parameter("tf_lookup_timeout", 0.1)
@@ -94,6 +97,13 @@ class PlannerNode(Node):
 
 
         self._stockpiles_sub = self.create_subscription(Stockpiles, "stockpile_polygons", self._on_stockpiles, 10)
+        self._structure_plan_sub = self.create_subscription(
+            StructurePlan,
+            structure_plan_topic,
+            self._on_structure_plan,
+            10,
+        )
+        self.get_logger().info(f"Subscribed to {structure_plan_topic}")
         self._scout_subs = []
         self._action_clients: dict[str, ActionClient] = {}
         for robot_id, capability in self.robot_capabilities.items():
@@ -180,6 +190,23 @@ class PlannerNode(Node):
             f"and {sum(len(q) for q in self.ready_blocks_by_type.values())} initially ready nodes"
         )
         self.allocate_manipulator_tasks()
+    
+    def _on_structure_plan(self, msg: StructurePlan) -> None:
+        """Load planned structure from rasterizer output."""
+        placements = []
+
+        for index, block in enumerate(msg.blocks):
+            placements.append(
+                {
+                    "block_id": f"block_{index}",
+                    "block_type": int(block.type),
+                    "pose": block.pose,
+                    "parent_ids": [],
+                }
+            )
+
+        self.initialize_structure(placements)
+        self.get_logger().info(f"Loaded structure plan with {len(placements)} blocks")
 
     def _placement_to_pose_stamped(self, placement: dict) -> PoseStamped:
         """Convert a planned placement dictionary into a PoseStamped."""
