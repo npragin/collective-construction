@@ -1,6 +1,7 @@
 """Central planner node for the collective-construction system."""
 
 from enum import Enum
+import math
 from pathlib import Path
 
 import yaml
@@ -52,10 +53,18 @@ class PlannerNode(Node):
         self.declare_parameter("world_frame", "world")
         self.declare_parameter("tf_lookup_timeout", 0.1)
         self.declare_parameter("robot_frame_prefix", "aruco_")
+        self.declare_parameter("build_origin_x", 0.0)
+        self.declare_parameter("build_origin_y", 0.0)
+        self.declare_parameter("build_origin_z", 0.0)
+        self.declare_parameter("build_yaw", 0.0)
 
         self._world_frame = self.get_parameter("world_frame").get_parameter_value().string_value
         self._tf_lookup_timeout = self.get_parameter("tf_lookup_timeout").get_parameter_value().double_value
         self._robot_frame_prefix = self.get_parameter("robot_frame_prefix").get_parameter_value().string_value
+        self._build_origin_x = self.get_parameter("build_origin_x").get_parameter_value().double_value
+        self._build_origin_y = self.get_parameter("build_origin_y").get_parameter_value().double_value
+        self._build_origin_z = self.get_parameter("build_origin_z").get_parameter_value().double_value
+        self._build_yaw = self.get_parameter("build_yaw").get_parameter_value().double_value
 
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
@@ -150,9 +159,9 @@ class PlannerNode(Node):
         self.dependency_graph = {}
         self.block_order = []
         self.ready_blocks_by_type = {
-            Block.TYPE_A: [],
-            Block.TYPE_B: [],
-            Block.TYPE_C: [],
+            Block.TYPE_A: deque(),
+            Block.TYPE_B: deque(),
+            Block.TYPE_C: deque(),
         }
 
         for index, placement in enumerate(block_placements):
@@ -183,7 +192,7 @@ class PlannerNode(Node):
         for block_id, node in self.dependency_graph.items():
             if int(node["remaining_parents"]) == 0:
                 block_type = int(node["block_type"])
-                self.ready_blocks_by_type.setdefault(block_type, []).append(block_id)
+                self.ready_blocks_by_type.setdefault(block_type, deque()).append(block_id)
 
         self.get_logger().info(
             f"Initialized dependency graph with {len(self.dependency_graph)} nodes "
@@ -192,29 +201,71 @@ class PlannerNode(Node):
         self.allocate_manipulator_tasks()
     
     def _on_structure_plan(self, msg: StructurePlan) -> None:
-        """Load planned structure from rasterizer output."""
+        """Load planned structure from rasterizer output.
+
+        The rasterizer publishes block centroids in the local build frame. The planner
+        converts each local centroid into the world frame before storing it in the
+        dependency graph.
+        """
         placements = []
 
         for index, block in enumerate(msg.blocks):
+            world_pose = self._local_pose_to_world(block.pose)
             placements.append(
                 {
                     "block_id": f"block_{index}",
                     "block_type": int(block.type),
-                    "pose": block.pose,
+                    "pose": world_pose,
                     "parent_ids": [],
                 }
             )
 
         self.initialize_structure(placements)
-        self.get_logger().info(f"Loaded structure plan with {len(placements)} blocks")
+        self.get_logger().info(
+            f"Loaded structure plan with {len(placements)} blocks "
+            f"using build origin ({self._build_origin_x:.3f}, {self._build_origin_y:.3f}, "
+            f"{self._build_origin_z:.3f}) and yaw {self._build_yaw:.3f} rad"
+        )
+
+    def _local_pose_to_world(self, local_pose: PoseStamped) -> PoseStamped:
+        """Convert a local build-frame pose into the world frame.
+
+        Phase-3 uses a planar rigid transform defined by the build origin and yaw
+        parameters. This matches the current rasterizer interface, which provides
+        local centroids but not world-frame placement poses.
+        """
+        world_pose = PoseStamped()
+        world_pose.header.stamp = local_pose.header.stamp
+        world_pose.header.frame_id = self._world_frame
+
+        lx = float(local_pose.pose.position.x)
+        ly = float(local_pose.pose.position.y)
+        lz = float(local_pose.pose.position.z)
+
+        c = math.cos(self._build_yaw)
+        s = math.sin(self._build_yaw)
+
+        world_pose.pose.position.x = self._build_origin_x + c * lx - s * ly
+        world_pose.pose.position.y = self._build_origin_y + s * lx + c * ly
+        world_pose.pose.position.z = self._build_origin_z + lz
+        world_pose.pose.orientation = local_pose.pose.orientation
+        if world_pose.pose.orientation.w == 0.0:
+            world_pose.pose.orientation.w = 1.0
+
+        return world_pose
 
     def _placement_to_pose_stamped(self, placement: dict) -> PoseStamped:
-        """Convert a planned placement dictionary into a PoseStamped."""
+        """Convert a planned placement dictionary into a world-frame PoseStamped."""
         pose = PoseStamped()
         pose.header.frame_id = self._world_frame
 
         if "pose" in placement:
             data = placement["pose"]
+            if isinstance(data, PoseStamped):
+                pose = data
+                if not pose.header.frame_id:
+                    pose.header.frame_id = self._world_frame
+                return pose
             if isinstance(data, dict):
                 pose.pose.position.x = float(data.get("x", 0.0))
                 pose.pose.position.y = float(data.get("y", 0.0))
