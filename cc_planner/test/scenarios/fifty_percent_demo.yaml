@@ -1,0 +1,82 @@
+# TDD scenario (RED) — encodes behavior the planner does NOT yet implement.
+#
+# Desired behavior under test:
+#   1. Need-driven retrieval: when a retriever goes idle it fetches the block
+#      type the manipulator needs next in structure order (closest such block).
+#   2. Structure-order manipulation: the manipulator places block_0, block_1,
+#      block_2 in declared order, each gated on that type having stock --
+#      regardless of which other types already have stock.
+#
+# Against the current planner this fails at the step-12 retriever_accept
+# (FIFO retrieval assigns retriever_1 the oldest reported block, c@1, not a@10).
+#
+# Build plan: three blocks, one per type, declared order A, B, C.
+# Placement coordinates are arbitrary (A=(0,0), B=(1,0), C=(2,0)).
+events:
+  # --- step 1: build plan --------------------------------------------------
+  - publish_structure_plan:
+      blocks:
+        - {type: A, x: 0.0, y: 0.0, z: 0.0}
+        - {type: B, x: 1.0, y: 0.0, z: 0.0}
+        - {type: C, x: 2.0, y: 0.0, z: 0.0}
+
+  # --- step 2-3: retriever positions ----------------------------------------
+  - set_robot_pose: {robot: retriever_1, x: 5.0, y: 0.0}
+  - set_robot_pose: {robot: retriever_2, x: 0.0, y: 0.0}
+
+  # --- step 4: publish stockpiles ----------------------------------------
+  # stockpiles (one per type) -- required for type binding and delivery counts
+  - publish_stockpiles:
+      stockpiles:
+        - {id: 31, x: 1.0, y: 0.0}
+        - {id: 32, x: 5.0, y: 0.0}
+        - {id: 33, x: 10.0, y: 0.0}
+
+  # --- step 5: scout block B at x=4 ---------------------------------------
+  - scout_report: {scout: scout_1, type: B, x: 4.0, y: 0.0}
+  # --- step 6: retriever_1 (closest) accepts it ---------------------------
+  - retriever_accept: {robot: retriever_1, expect: {type: B, x: 4.0, y: 0.0}}
+
+  # --- step 7: scout block B at x=6 ---------------------------------------
+  - scout_report: {scout: scout_1, type: B, x: 6.0, y: 0.0}
+  # --- step 8: retriever_2 accepts it (retriever_1 is busy) ---------------
+  - retriever_accept: {robot: retriever_2, expect: {type: B, x: 6.0, y: 0.0}}
+
+  # --- steps 9-11: scout three block C reports -----------------------------
+  - scout_report: {scout: scout_1, type: C, x: 1.0, y: 0.0}
+  - scout_report: {scout: scout_1, type: C, x: 2.0, y: 0.0}
+  - scout_report: {scout: scout_1, type: C, x: 3.0, y: 0.0}
+  # --- step 12: scout block A at x=10 -------------------------------------
+  - scout_report: {scout: scout_1, type: A, x: 10.0, y: 0.0}
+
+  # --- step 13: retriever_1 completes (delivered B@4) ---------------------
+  - retriever_complete: {robot: retriever_1}
+  # --- step 14: retriever_1 accepts block A@10 (manipulator needs A next) -
+  - retriever_accept: {robot: retriever_1, expect: {type: A, x: 10.0, y: 0.0}}
+
+  # --- step 15: retriever_2 completes (delivered B@6) ---------------------
+  - retriever_complete: {robot: retriever_2}
+  # --- step 16: retriever_2 accepts block C@1 (closest C to retriever_2) --
+  - retriever_accept: {robot: retriever_2, expect: {type: C, x: 1.0, y: 0.0}}
+
+  # --- step 17: retriever_1 completes (delivered A@10) --------------------
+  - retriever_complete: {robot: retriever_1}
+
+  # --- step 18: manipulator_1 places block A (now in stock) ---------------
+  - manipulator_accept: {robot: manipulator_1, expect: {type: A, x: 0.0, y: 0.0}}
+  # --- step 19: retriever_1 accepts block C@3 (closest remaining C) -------
+  - retriever_accept: {robot: retriever_1, expect: {type: C, x: 3.0, y: 0.0}}
+  # --- step 20: manipulator_1 completes block A ---------------------------
+  - manipulator_complete: {robot: manipulator_1}
+
+  # --- step 21: manipulator_1 places block B (B already in stock) ---------
+  - manipulator_accept: {robot: manipulator_1, expect: {type: B, x: 1.0, y: 0.0}}
+  # --- step 22: manipulator_1 completes block B ---------------------------
+  - manipulator_complete: {robot: manipulator_1}
+
+  # --- step 23: retriever_2 completes (delivered C@1) ---------------------
+  - retriever_complete: {robot: retriever_2}
+  # --- step 24: manipulator_1 places block C (now in stock) ---------------
+  - manipulator_accept: {robot: manipulator_1, expect: {type: C, x: 2.0, y: 0.0}}
+  # --- step 25: manipulator_1 completes block C ---------------------------
+  - manipulator_complete: {robot: manipulator_1}
