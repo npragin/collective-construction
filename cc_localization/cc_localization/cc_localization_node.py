@@ -19,6 +19,7 @@ from rclpy.node import Node
 from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker, MarkerArray
 
+from rclpy.qos import QoSProfile, DurabilityPolicy
 # Hard-coded tag ids per frame. Convention: counter-clockwise starting at origin
 # (origin -> +X -> +X+Y -> +Y). Edit here if the printed tags change.
 OUTER_TAG_IDS = (0, 1, 2, 3)
@@ -156,6 +157,7 @@ class CcLocalizationNode(Node):
 
         self.broadcaster = TransformBroadcaster(self)
         self.marker_pub = self.create_publisher(MarkerArray, "workspace_markers", 1)
+        
         self.koz_pub = self.create_publisher(OccupancyGrid, "koz_mask", 1)
         self.timer = self.create_timer(1.0 / tick_rate_hz, self.tick)
 

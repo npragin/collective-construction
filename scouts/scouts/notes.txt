@@ -1,0 +1,15 @@
+overall goal: 
+    given a map, i want CPP waypoints generated over it
+    i want the scouts to follow these way points using nav2 
+    Additionally, I want to randomly distribute obstacles and i want the pioneer to go around them
+        will nav2 path planning already take care of this?
+
+
+Understanding how nav2 works
+    turtlebot, build off tutorial
+
+generating waypoints
+    https://api.nav2.org/actions/jazzy/followwaypoints.html
+    hard code these, seems simple enough
+    get these to show in rviz
+
