@@ -110,127 +110,7 @@ class PlannerNode(Node):
                 action_name = f"{robot_id}/{self._manipulation_action_name}"
                 self._action_clients[robot_id] = ActionClient(self, ManipulationTask, action_name)
 
-    def _on_structure_plan(self, msg: StructurePlan) -> None:
-        """
-        Load the planned structure from rasterizer output.
-
-        Assumptions:
-        - The plan is its own frameless coordinate system whose origin
-          coincides with the build-site origin, so block positions are kept
-          unchanged and only relabeled into the build frame.
-        """
-        self.dependency_graph = {}
-        self.ready_blocks_by_type = {}
-
-        for index, block in enumerate(msg.blocks):
-            block_id = f"block_{index}"
-
-            pose = PoseStamped()
-            pose.header.stamp = block.pose.header.stamp
-            pose.header.frame_id = self._build_frame
-            pose.pose = copy.deepcopy(block.pose.pose)
-
-            self.dependency_graph[block_id] = {
-                "block_type": int(block.type),
-                "pose": pose,
-                "parent_ids": [],
-                "child_ids": [],
-                "placed": False,
-                "in_progress": False,
-            }
-
-        # TODO: Construct dependency graph here.
-
-        for block_id, node in self.dependency_graph.items():
-            if self._parents_placed(node):
-                block_type = node["block_type"]
-                self.ready_blocks_by_type.setdefault(block_type, deque[str]()).append(block_id)
-
-        self.get_logger().info(
-            f"Loaded structure plan with {len(self.dependency_graph)} blocks in frame "
-            f"'{self._build_frame}' ({sum(len(q) for q in self.ready_blocks_by_type.values())} initially ready)"
-        )
-        self.allocate_manipulator_tasks()
-
-    def _parents_placed(self, node: dict[str, Any]) -> bool:
-        """Return True when every parent of the given graph node has been placed."""
-        return all(self.dependency_graph[parent_id]["placed"] for parent_id in node["parent_ids"])
-
-    def _reserve_placeable_block(self) -> str | None:
-        """
-        Reserve one dependency-ready block whose type is stocked.
-
-        Pops the block from its ready queue, marks it in-progress, and consumes
-        one unit of its stockpile's stock. Returns None when no block is both
-        dependency-ready and stocked. Stale queue entries are skipped lazily.
-        """
-        for block_type in self.ready_blocks_by_type:
-            stockpile_tag = self.type_to_stockpile.get(block_type)
-            if stockpile_tag is None or self.stockpile_counts.get(stockpile_tag, 0) <= 0:
-                continue
-
-            queue = self.ready_blocks_by_type[block_type]
-            while queue:
-                block_id = queue.popleft()
-                node = self.dependency_graph[block_id]
-                if node["placed"] or node["in_progress"] or not self._parents_placed(node):
-                    continue
-                node["in_progress"] = True
-                self.stockpile_counts[stockpile_tag] -= 1
-                return block_id
-
-        return None
-
-    def _release_placeable_block(self, block_id: str) -> None:
-        """
-        Inverse of _reserve_placeable_block.
-
-        Returns the block to the front of its ready queue, clears its
-        in-progress flag, and restores the stock unit consumed at reservation.
-        """
-        node = self.dependency_graph[block_id]
-        node["in_progress"] = False
-        block_type = node["block_type"]
-        self.ready_blocks_by_type[block_type].appendleft(block_id)
-        stockpile_tag = self.type_to_stockpile.get(block_type)
-        if stockpile_tag is not None:
-            self.stockpile_counts[stockpile_tag] += 1
-
-    def allocate_manipulator_tasks(self) -> None:
-        """Assign one ready planned block to each idle manipulator if stock is available."""
-        if not self.dependency_graph:
-            return
-
-        idle_manipulators = [
-            robot_id
-            for robot_id, status in self.robot_status.items()
-            if status is RobotStatus.IDLE
-            and self.robot_capabilities[robot_id] == "manipulator"
-            and self._action_clients[robot_id].server_is_ready()
-        ]
-        if not idle_manipulators:
-            return
-
-        for robot_id in idle_manipulators:
-            block_id = self._reserve_placeable_block()
-            if block_id is None:
-                self.get_logger().debug(f"No manipulator task available for {robot_id}")
-                return
-
-            block_node = self.dependency_graph[block_id]
-            block_type = block_node["block_type"]
-            stockpile = self.stockpiles[self.type_to_stockpile[block_type]]
-
-            block = Block()
-            block.type = block_type
-            block.pose = block_node["pose"]
-
-            self.manipulation_in_flight[robot_id] = block_id
-
-            if not self.send_manipulation_task(robot_id, block, stockpile):
-                self.manipulation_in_flight.pop(robot_id)
-                self._release_placeable_block(block_id)
-                continue
+    # ----- Retrieval pipeline -----
 
     def _on_stockpiles(self, msg: Stockpiles) -> None:
         """Upsert detected stockpiles by tag id; drain pending blocks if any new ids appeared."""
@@ -414,6 +294,130 @@ class PlannerNode(Node):
 
         self.allocate_manipulator_tasks()
         self._try_assign_retrievers()
+
+    # ----- Manipulation pipeline -----
+
+    def _on_structure_plan(self, msg: StructurePlan) -> None:
+        """
+        Load the planned structure from rasterizer output.
+
+        Assumptions:
+        - The plan is its own frameless coordinate system whose origin
+          coincides with the build-site origin, so block positions are kept
+          unchanged and only relabeled into the build frame.
+        """
+        self.dependency_graph = {}
+        self.ready_blocks_by_type = {}
+
+        for index, block in enumerate(msg.blocks):
+            block_id = f"block_{index}"
+
+            pose = PoseStamped()
+            pose.header.stamp = block.pose.header.stamp
+            pose.header.frame_id = self._build_frame
+            pose.pose = copy.deepcopy(block.pose.pose)
+
+            self.dependency_graph[block_id] = {
+                "block_type": int(block.type),
+                "pose": pose,
+                "parent_ids": [],
+                "child_ids": [],
+                "placed": False,
+                "in_progress": False,
+            }
+
+        # TODO: Construct dependency graph here.
+
+        for block_id, node in self.dependency_graph.items():
+            if self._parents_placed(node):
+                block_type = node["block_type"]
+                self.ready_blocks_by_type.setdefault(block_type, deque[str]()).append(block_id)
+
+        self.get_logger().info(
+            f"Loaded structure plan with {len(self.dependency_graph)} blocks in frame "
+            f"'{self._build_frame}' ({sum(len(q) for q in self.ready_blocks_by_type.values())} initially ready)"
+        )
+        self.allocate_manipulator_tasks()
+
+    def _parents_placed(self, node: dict[str, Any]) -> bool:
+        """Return True when every parent of the given graph node has been placed."""
+        return all(self.dependency_graph[parent_id]["placed"] for parent_id in node["parent_ids"])
+
+    def allocate_manipulator_tasks(self) -> None:
+        """Assign one ready planned block to each idle manipulator if stock is available."""
+        if not self.dependency_graph:
+            return
+
+        idle_manipulators = [
+            robot_id
+            for robot_id, status in self.robot_status.items()
+            if status is RobotStatus.IDLE
+            and self.robot_capabilities[robot_id] == "manipulator"
+            and self._action_clients[robot_id].server_is_ready()
+        ]
+        if not idle_manipulators:
+            return
+
+        for robot_id in idle_manipulators:
+            block_id = self._reserve_placeable_block()
+            if block_id is None:
+                self.get_logger().debug(f"No manipulator task available for {robot_id}")
+                return
+
+            block_node = self.dependency_graph[block_id]
+            block_type = block_node["block_type"]
+            stockpile = self.stockpiles[self.type_to_stockpile[block_type]]
+
+            block = Block()
+            block.type = block_type
+            block.pose = block_node["pose"]
+
+            self.manipulation_in_flight[robot_id] = block_id
+
+            if not self.send_manipulation_task(robot_id, block, stockpile):
+                self.manipulation_in_flight.pop(robot_id)
+                self._release_placeable_block(block_id)
+                continue
+
+    def _reserve_placeable_block(self) -> str | None:
+        """
+        Reserve one dependency-ready block whose type is stocked.
+
+        Pops the block from its ready queue, marks it in-progress, and consumes
+        one unit of its stockpile's stock. Returns None when no block is both
+        dependency-ready and stocked. Stale queue entries are skipped lazily.
+        """
+        for block_type in self.ready_blocks_by_type:
+            stockpile_tag = self.type_to_stockpile.get(block_type)
+            if stockpile_tag is None or self.stockpile_counts.get(stockpile_tag, 0) <= 0:
+                continue
+
+            queue = self.ready_blocks_by_type[block_type]
+            while queue:
+                block_id = queue.popleft()
+                node = self.dependency_graph[block_id]
+                if node["placed"] or node["in_progress"] or not self._parents_placed(node):
+                    continue
+                node["in_progress"] = True
+                self.stockpile_counts[stockpile_tag] -= 1
+                return block_id
+
+        return None
+
+    def _release_placeable_block(self, block_id: str) -> None:
+        """
+        Inverse of _reserve_placeable_block.
+
+        Returns the block to the front of its ready queue, clears its
+        in-progress flag, and restores the stock unit consumed at reservation.
+        """
+        node = self.dependency_graph[block_id]
+        node["in_progress"] = False
+        block_type = node["block_type"]
+        self.ready_blocks_by_type[block_type].appendleft(block_id)
+        stockpile_tag = self.type_to_stockpile.get(block_type)
+        if stockpile_tag is not None:
+            self.stockpile_counts[stockpile_tag] += 1
 
     def send_manipulation_task(
         self,
