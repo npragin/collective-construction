@@ -12,6 +12,8 @@ setup(
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/config", glob("config/*.yaml")),
+        ("share/" + package_name + "/launch", glob("launch/*.launch.py")),
+        ("share/" + package_name + "/scenarios", glob("test/scenarios/*.yaml")),
     ],
     package_data={"": ["py.typed"]},
     install_requires=["setuptools"],
@@ -30,6 +32,7 @@ setup(
         "console_scripts": [
             "cc_planner = cc_planner.planner_node:main",
             "fake_retriever = cc_planner.fake_retriever:main",
+            "test_harness = cc_planner.test_harness:main",
         ],
     },
 )
