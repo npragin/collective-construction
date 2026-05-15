@@ -326,6 +326,12 @@ class PlannerNode(Node):
                 "in_progress": False,
             }
 
+            # Placeholder code that creates a linear dependency graph in the order blocks appear
+            if index != 0:
+                self.dependency_graph[block_id]["parent_ids"] = [f"block_{index - 1}"]
+            if index != len(msg.blocks) - 1:
+                self.dependency_graph[block_id]["child_ids"] = [f"block_{index + 1}"]
+
         # TODO: Construct dependency graph here.
 
         for block_id, node in self.dependency_graph.items():
