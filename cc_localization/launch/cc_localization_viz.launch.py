@@ -12,7 +12,10 @@ from launch_ros.actions import Node
 
 def generate_launch_description() -> LaunchDescription:
     pkg_share = Path(get_package_share_directory("cc_localization"))
-    default_rviz = str(pkg_share / "rviz" / "scout.rviz")
+
+    default_rviz = str(pkg_share / "rviz" / "aruco_tf.rviz")
+
+
 
     rviz_config = LaunchConfiguration("rviz_config")
     on_sim = LaunchConfiguration("on_sim")

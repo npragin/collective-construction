@@ -1,11 +1,11 @@
 Panels:
   - Class: rviz_common/Displays
-    Help Height: 70
+    Help Height: 85
     Name: Displays
     Property Tree Widget:
       Expanded: ~
       Splitter Ratio: 0.5
-    Tree Height: 371
+    Tree Height: 340
   - Class: rviz_common/Views
     Expanded:
       - /Current View1
@@ -39,9 +39,15 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
+        build:
+          Value: true
         camera:
           Value: true
-        inner:
+        stockpile_10:
+          Value: true
+        stockpile_8:
+          Value: true
+        stockpile_9:
           Value: true
         world:
           Value: true
@@ -52,9 +58,15 @@ Visualization Manager:
       Show Names: true
       Tree:
         world:
+          build:
+            {}
           camera:
             {}
-          inner:
+          stockpile_10:
+            {}
+          stockpile_8:
+            {}
+          stockpile_9:
             {}
       Update Interval: 0
       Value: true
@@ -69,6 +81,29 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /workspace_markers
+      Value: true
+    - Alpha: 0.699999988079071
+      Binary representation: false
+      Binary threshold: 100
+      Class: rviz_default_plugins/Map
+      Color Scheme: map
+      Draw Behind: false
+      Enabled: true
+      Name: Map
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /koz_mask
+      Update Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /koz_mask_updates
+      Use Timestamp: false
       Value: true
   Enabled: true
   Global Options:
@@ -113,9 +148,9 @@ Window Geometry:
   Height: 1011
   Hide Left Dock: false
   Hide Right Dock: false
-  QMainWindow State: 000000ff00000000fd0000000100000000000001c900000395fc0200000002fb000000100044006900730070006c006100790073010000003f000001f9000000cc00fffffffb0000000a00560069006500770073010000023e00000196000000a900ffffff0000056f0000039500000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000100000000000001c900000389fc0200000002fb000000100044006900730070006c0061007900730100000048000001f2000000f300fffffffb0000000a00560069006500770073010000024100000190000000c500ffffff0000056e0000038900000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Views:
     collapsed: false
   Width: 1854
   X: 66
-  Y: 32
+  Y: 40
