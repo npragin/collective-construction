@@ -1,5 +1,4 @@
 geometry_msgs/PolygonStamped stockpile
-geometry_msgs/PoseStamped target_pose # RW: Added target pose for manipulator
 cc_interfaces/Block block
 ---
 bool success
