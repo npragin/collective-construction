@@ -134,21 +134,23 @@ sensors:
         frame_id: imu_0_link
         tf_ned_to_enu: true
 
-# manipulators:
-#   arms:
-#     - model: kinova_gen3_lite
-#       parent: default_mount
-#       xyz: [0.0, 0.0, 0.0]
-#       rpy: [0.0, 0.0, 0.0]
-#       ip: 192.168.131.40
-#       port: 10000
-#       poses:
-#         - name: custom
-#           joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-#       gripper:
-#         model: kinova_2f_lite
-#         xyz: [0.0, 0.0, 0.0]
-#         rpy: [0.0, 0.0, 0.0]
-#         poses:
-#           - name: custom
-#             joints: [0.0]
+manipulators:
+  moviet: 
+    enable: true
+  arms:
+    - model: kinova_gen3_lite
+      parent: default_mount
+      xyz: [0.0, 0.0, 0.0]
+      rpy: [0.0, 0.0, 0.0]
+      ip: 192.168.1.10
+      port: 10000
+      poses:
+        - name: custom
+          joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      gripper:
+        model: kinova_2f_lite
+        xyz: [0.0, 0.0, 0.0]
+        rpy: [0.0, 0.0, 0.0]
+        poses:
+          - name: custom
+            joints: [0.0]

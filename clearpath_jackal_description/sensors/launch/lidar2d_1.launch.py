@@ -8,81 +8,40 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
 
-    launch_arg_prefix = DeclareLaunchArgument(
-        'prefix',
-        default_value='',
-        description='')
+    # Include Packages
+    pkg_clearpath_sensors = FindPackageShare('clearpath_sensors')
 
-    prefix = LaunchConfiguration('prefix')
+    # Declare launch files
+    launch_file_hokuyo_ust = PathJoinSubstitution([
+        pkg_clearpath_sensors, 'launch', 'hokuyo_ust.launch.py'])
 
-    # Nodes
-    node_lidar2d_1_gz_bridge = Node(
-        name='lidar2d_1_gz_bridge',
-        executable='parameter_bridge',
-        package='ros_gz_bridge',
-        namespace='j100_0897/sensors/',
-        output='screen',
-        parameters=
-            [
-                {
-                    'use_sim_time': True
-                    ,
-                    'config_file': '/home/jn2-alt/college/2025-2026/spring/ROB599_multi_robot/collective-construction/clearpath_jackal_description/sensors/config/lidar2d_1.yaml'
-                    ,
-                }
-                ,
-            ]
-        ,
-    )
-
-    node_lidar2d_1_static_tf = Node(
-        name='lidar2d_1_static_tf',
-        executable='static_transform_publisher',
-        package='tf2_ros',
-        namespace='j100_0897',
-        output='screen',
-        arguments=
-            [
-                '--frame-id'
-                ,
-                'lidar2d_1_link'
-                ,
-                '--child-frame-id'
-                ,
-                'j100_0897/robot/base_link/lidar2d_1'
-                ,
-            ]
-        ,
-        remappings=
+    # Include launch files
+    launch_hokuyo_ust = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([launch_file_hokuyo_ust]),
+        launch_arguments=
             [
                 (
-                    '/tf'
+                    'parameters'
                     ,
-                    'tf'
+                    '/home/jn2-alt/college/2025-2026/spring/ROB599_multi_robot/collective-construction/clearpath_jackal_description/sensors/config/lidar2d_1.yaml'
                 )
                 ,
                 (
-                    '/tf_static'
+                    'namespace'
                     ,
-                    'tf_static'
+                    'j100_0897/sensors/lidar2d_1'
+                )
+                ,
+                (
+                    'robot_namespace'
+                    ,
+                    'j100_0897'
                 )
                 ,
             ]
-        ,
-        parameters=
-            [
-                {
-                    'use_sim_time': True
-                    ,
-                }
-                ,
-            ]
-        ,
     )
 
     # Create LaunchDescription
     ld = LaunchDescription()
-    ld.add_action(launch_arg_prefix)
-    ld.add_action(node_lidar2d_1_gz_bridge)
-    ld.add_action(node_lidar2d_1_static_tf)
+    ld.add_action(launch_hokuyo_ust)
     return ld

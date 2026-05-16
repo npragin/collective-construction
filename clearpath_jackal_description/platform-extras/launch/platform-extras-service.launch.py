@@ -9,31 +9,31 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
 
     # Include Packages
-    pkg_clearpath_sensors = FindPackageShare('clearpath_sensors')
+    pkg_clearpath_common = FindPackageShare('clearpath_common')
 
     # Declare launch files
-    launch_file_redshift_um7 = PathJoinSubstitution([
-        pkg_clearpath_sensors, 'launch', 'redshift_um7.launch.py'])
+    launch_file_platform_extras = PathJoinSubstitution([
+        pkg_clearpath_common, 'launch', 'platform_extras.launch.py'])
 
     # Include launch files
-    launch_redshift_um7 = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([launch_file_redshift_um7]),
+    launch_platform_extras = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([launch_file_platform_extras]),
         launch_arguments=
             [
                 (
-                    'parameters'
+                    'setup_path'
                     ,
-                    '/home/jn2-alt/college/2025-2026/spring/ROB599_multi_robot/collective-construction/clearpath_jackal_description/sensors/config/imu_1.yaml'
+                    '/home/jn2-alt/college/2025-2026/spring/ROB599_multi_robot/collective-construction/clearpath_jackal_description'
+                )
+                ,
+                (
+                    'use_sim_time'
+                    ,
+                    'false'
                 )
                 ,
                 (
                     'namespace'
-                    ,
-                    'j100_0897/sensors/imu_1'
-                )
-                ,
-                (
-                    'robot_namespace'
                     ,
                     'j100_0897'
                 )
@@ -43,5 +43,5 @@ def generate_launch_description():
 
     # Create LaunchDescription
     ld = LaunchDescription()
-    ld.add_action(launch_redshift_um7)
+    ld.add_action(launch_platform_extras)
     return ld

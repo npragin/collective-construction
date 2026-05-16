@@ -8,6 +8,27 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
 
+    launch_arg_diagnostic_updater_params = DeclareLaunchArgument(
+        'diagnostic_updater_params',
+        default_value='/home/jn2-alt/college/2025-2026/spring/ROB599_multi_robot/collective-construction/clearpath_jackal_description/platform/config/diagnostic_updater.yaml',
+        description='')
+
+    diagnostic_updater_params = LaunchConfiguration('diagnostic_updater_params')
+
+    launch_arg_diagnostic_aggregator_params = DeclareLaunchArgument(
+        'diagnostic_aggregator_params',
+        default_value='/home/jn2-alt/college/2025-2026/spring/ROB599_multi_robot/collective-construction/clearpath_jackal_description/platform/config/diagnostic_aggregator.yaml',
+        description='')
+
+    diagnostic_aggregator_params = LaunchConfiguration('diagnostic_aggregator_params')
+
+    launch_arg_foxglove_bridge_parameters = DeclareLaunchArgument(
+        'foxglove_bridge_parameters',
+        default_value='/home/jn2-alt/college/2025-2026/spring/ROB599_multi_robot/collective-construction/clearpath_jackal_description/platform/config/foxglove_bridge.yaml',
+        description='')
+
+    foxglove_bridge_parameters = LaunchConfiguration('foxglove_bridge_parameters')
+
     launch_arg_imu_filter = DeclareLaunchArgument(
         'imu_filter',
         default_value='/home/jn2-alt/college/2025-2026/spring/ROB599_multi_robot/collective-construction/clearpath_jackal_description/platform/config/imu_filter.yaml',
@@ -17,10 +38,18 @@ def generate_launch_description():
 
     # Include Packages
     pkg_clearpath_common = FindPackageShare('clearpath_common')
+    pkg_clearpath_firmware = FindPackageShare('clearpath_firmware')
+    pkg_clearpath_diagnostics = FindPackageShare('clearpath_diagnostics')
 
     # Declare launch files
     launch_file_platform = PathJoinSubstitution([
         pkg_clearpath_common, 'launch', 'platform.launch.py'])
+    launch_file_proton = PathJoinSubstitution([
+        pkg_clearpath_firmware, 'launch', 'proton.launch.py'])
+    launch_file_diagnostics = PathJoinSubstitution([
+        pkg_clearpath_diagnostics, 'launch', 'diagnostics.launch.py'])
+    launch_file_foxglove_bridge = PathJoinSubstitution([
+        pkg_clearpath_diagnostics, 'launch', 'foxglove_bridge.launch.py'])
 
     # Include launch files
     launch_platform = IncludeLaunchDescription(
@@ -36,7 +65,7 @@ def generate_launch_description():
                 (
                     'use_sim_time'
                     ,
-                    'true'
+                    'false'
                 )
                 ,
                 (
@@ -51,75 +80,117 @@ def generate_launch_description():
                     'true'
                 )
                 ,
+            ]
+    )
+
+    launch_proton = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([launch_file_proton]),
+        launch_arguments=
+            [
                 (
-                    'use_manipulation_controllers'
+                    'namespace'
                     ,
-                    'true'
+                    'j100_0897'
+                )
+                ,
+                (
+                    'platform'
+                    ,
+                    'j100'
+                )
+                ,
+            ]
+    )
+
+    launch_diagnostics = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([launch_file_diagnostics]),
+        launch_arguments=
+            [
+                (
+                    'namespace'
+                    ,
+                    'j100_0897'
+                )
+                ,
+                (
+                    'updater_parameters'
+                    ,
+                    diagnostic_updater_params
+                )
+                ,
+                (
+                    'aggregator_parameters'
+                    ,
+                    diagnostic_aggregator_params
+                )
+                ,
+            ]
+    )
+
+    launch_foxglove_bridge = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([launch_file_foxglove_bridge]),
+        launch_arguments=
+            [
+                (
+                    'namespace'
+                    ,
+                    'j100_0897'
+                )
+                ,
+                (
+                    'parameters'
+                    ,
+                    foxglove_bridge_parameters
                 )
                 ,
             ]
     )
 
     # Nodes
-    node_cmd_vel_bridge = Node(
-        name='cmd_vel_bridge',
-        executable='parameter_bridge',
-        package='ros_gz_bridge',
+    node_battery_state_control = Node(
+        name='battery_state_control',
+        executable='battery_state_control',
+        package='clearpath_hardware_interfaces',
         namespace='j100_0897',
         output='screen',
         arguments=
             [
-                'j100_0897/cmd_vel@geometry_msgs/msg/TwistStamped[gz.msgs.Twist'
+                '-s'
                 ,
-                '/model/j100_0897/robot/cmd_vel@geometry_msgs/msg/TwistStamped]gz.msgs.Twist'
-                ,
-            ]
-        ,
-        remappings=
-            [
-                (
-                    'j100_0897/cmd_vel'
-                    ,
-                    'cmd_vel'
-                )
-                ,
-                (
-                    '/model/j100_0897/robot/cmd_vel'
-                    ,
-                    'platform/cmd_vel'
-                )
-                ,
-            ]
-        ,
-        parameters=
-            [
-                {
-                    'use_sim_time': True
-                    ,
-                }
+                '/home/jn2-alt/college/2025-2026/spring/ROB599_multi_robot/collective-construction/clearpath_jackal_description'
                 ,
             ]
         ,
     )
 
-    node_odom_base_tf_bridge = Node(
-        name='odom_base_tf_bridge',
-        executable='parameter_bridge',
-        package='ros_gz_bridge',
+    node_battery_state_estimator = Node(
+        name='battery_state_estimator',
+        executable='battery_state_estimator',
+        package='clearpath_hardware_interfaces',
         namespace='j100_0897',
         output='screen',
         arguments=
             [
-                '/model/j100_0897/robot/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V'
+                '-s'
+                ,
+                '/home/jn2-alt/college/2025-2026/spring/ROB599_multi_robot/collective-construction/clearpath_jackal_description'
                 ,
             ]
         ,
+    )
+
+    node_wireless_watcher = Node(
+        name='wireless_watcher',
+        executable='wireless_watcher',
+        package='wireless_watcher',
+        namespace='j100_0897',
+        output='screen',
         remappings=
             [
                 (
-                    '/model/j100_0897/robot/tf'
+                    '/diagnostics'
                     ,
-                    'tf'
+                    'diagnostics'
                 )
                 ,
             ]
@@ -127,7 +198,13 @@ def generate_launch_description():
         parameters=
             [
                 {
-                    'use_sim_time': True
+                    'hz': 1.0
+                    ,
+                    'dev': ''
+                    ,
+                    'connected_topic': 'platform/wifi_connected'
+                    ,
+                    'connection_topic': 'platform/wifi_status'
                     ,
                 }
                 ,
@@ -135,27 +212,8 @@ def generate_launch_description():
         ,
     )
 
-    node_imu_0_gz_bridge = Node(
-        name='imu_0_gz_bridge',
-        executable='parameter_bridge',
-        package='ros_gz_bridge',
-        namespace='j100_0897',
-        output='screen',
-        parameters=
-            [
-                {
-                    'use_sim_time': True
-                    ,
-                    'config_file': '/home/jn2-alt/college/2025-2026/spring/ROB599_multi_robot/collective-construction/clearpath_jackal_description/sensors/config/imu_0.yaml'
-                    ,
-                }
-                ,
-            ]
-        ,
-    )
-
-    node_imu_filter_node = Node(
-        name='imu_filter_node',
+    node_imu_filter_madgwick = Node(
+        name='imu_filter_madgwick',
         executable='imu_filter_madgwick_node',
         package='imu_filter_madgwick',
         namespace='j100_0897',
@@ -196,20 +254,43 @@ def generate_launch_description():
         ,
     )
 
-    node_gps_0_gz_bridge = Node(
-        name='gps_0_gz_bridge',
-        executable='parameter_bridge',
-        package='ros_gz_bridge',
+    node_nmea_topic_driver = Node(
+        name='nmea_topic_driver',
+        executable='nmea_topic_driver',
+        package='nmea_navsat_driver',
         namespace='j100_0897',
         output='screen',
-        parameters=
+        remappings=
             [
-                {
-                    'use_sim_time': True
+                (
+                    'nmea_sentence'
                     ,
-                    'config_file': '/home/jn2-alt/college/2025-2026/spring/ROB599_multi_robot/collective-construction/clearpath_jackal_description/sensors/config/gps_0.yaml'
+                    'sensors/gps_0/nmea_sentence'
+                )
+                ,
+                (
+                    'fix'
                     ,
-                }
+                    'sensors/gps_0/fix'
+                )
+                ,
+                (
+                    'heading'
+                    ,
+                    'sensors/gps_0/heading'
+                )
+                ,
+                (
+                    'time_reference'
+                    ,
+                    'sensors/gps_0/time_reference'
+                )
+                ,
+                (
+                    'vel'
+                    ,
+                    'sensors/gps_0/vel'
+                )
                 ,
             ]
         ,
@@ -217,11 +298,17 @@ def generate_launch_description():
 
     # Create LaunchDescription
     ld = LaunchDescription()
+    ld.add_action(launch_arg_diagnostic_updater_params)
+    ld.add_action(launch_arg_diagnostic_aggregator_params)
+    ld.add_action(launch_arg_foxglove_bridge_parameters)
     ld.add_action(launch_arg_imu_filter)
     ld.add_action(launch_platform)
-    ld.add_action(node_cmd_vel_bridge)
-    ld.add_action(node_odom_base_tf_bridge)
-    ld.add_action(node_imu_0_gz_bridge)
-    ld.add_action(node_imu_filter_node)
-    ld.add_action(node_gps_0_gz_bridge)
+    ld.add_action(launch_proton)
+    ld.add_action(launch_diagnostics)
+    ld.add_action(launch_foxglove_bridge)
+    ld.add_action(node_battery_state_control)
+    ld.add_action(node_battery_state_estimator)
+    ld.add_action(node_wireless_watcher)
+    ld.add_action(node_imu_filter_madgwick)
+    ld.add_action(node_nmea_topic_driver)
     return ld

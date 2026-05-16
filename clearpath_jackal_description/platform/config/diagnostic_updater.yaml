@@ -4,9 +4,8 @@ j100_0897:
       serial_number: 'j100-0897'
       platform_model: 'j100'
       ros_distro: 'jazzy'
-      latest_apt_firmware_version: 'simulated'
-      installed_apt_firmware_version: 'simulated'
-      use_sim_time: True
+      latest_apt_firmware_version: '3.0.3'
+      installed_apt_firmware_version: 'none'
       bms_state_rate: 10.0
       bms_state_tolerance: 0.15
       mcu_protocol: 'proton'
