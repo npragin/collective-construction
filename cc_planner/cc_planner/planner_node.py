@@ -210,8 +210,42 @@ class PlannerNode(Node):
             if xy is not None:
                 poses[robot_id] = xy
 
+        # If multiple reported blocks exist, prioritize by dependency graph.
+        if len(self.reported_blocks) > 1 and self.dependency_graph:
+            # Compute a simple depth metric for block types: smallest ancestor-depth
+            # among nodes of that type (lower depth -> base/earlier in structure).
+            depth_cache: dict[str, int] = {}
+
+            def _node_depth(block_id: str) -> int:
+                if block_id in depth_cache:
+                    return depth_cache[block_id]
+                node = self.dependency_graph.get(block_id)
+                if not node or not node["parent_ids"]:
+                    depth_cache[block_id] = 0
+                    return 0
+                d = 1 + max((_node_depth(p) for p in node["parent_ids"]))
+                depth_cache[block_id] = d
+                return d
+
+            type_priority: dict[int, int] = {}
+            for block_id, node in self.dependency_graph.items():
+                t = int(node["block_type"])
+                depth = _node_depth(block_id)
+                if t not in type_priority or depth < type_priority[t]:
+                    type_priority[t] = depth
+
+            # Lower priority value = earlier need. If a type is not in graph,
+            # give it a large priority so graph-backed types come first.
+            def _priority_for_block(b: Block) -> int:
+                return type_priority.get(int(b.type), 10**6)
+
+            blocks_iter = sorted(enumerate(self.reported_blocks), key=lambda iv: (_priority_for_block(iv[1]), iv[0]))
+            blocks_to_process = [b for i, b in blocks_iter]
+        else:
+            blocks_to_process = list(self.reported_blocks)
+
         remaining: list[Block] = []
-        for block in self.reported_blocks:
+        for block in blocks_to_process:
             if not poses:
                 remaining.append(block)
                 continue
@@ -225,7 +259,19 @@ class PlannerNode(Node):
             if not self._send_retrieval_task(robot_id, block, stockpile):
                 remaining.append(block)
             del poses[robot_id]
-        self.reported_blocks = remaining
+        # Preserve ordering for unassigned blocks: use remaining in original FIFO order
+        if len(remaining) == 0:
+            self.reported_blocks = []
+        else:
+            # Keep only reported blocks that were not assigned this pass, preserving their original arrival order
+            assigned_ids = {id(b) for b in self.reported_blocks} - {id(b) for b in remaining}
+            new_queue: list[Block] = []
+            for b in self.reported_blocks:
+                if id(b) in assigned_ids:
+                    continue
+                new_queue.append(b)
+            # Append those that remained (they already are in arrival order in `remaining`)
+            self.reported_blocks = new_queue + remaining
 
     def _lookup_robot_xy(self, robot_id: str) -> tuple[float, float] | None:
         """
