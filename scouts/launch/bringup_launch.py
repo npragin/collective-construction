@@ -62,10 +62,12 @@ def generate_launch_description():
     # '<robot_namespace>' keyword shall be replaced by 'namespace' launch argument
     # in config file 'nav2_multirobot_params.yaml' as a default & example.
     # User defined config file should contain '<robot_namespace>' keyword for the replacements.
+    # 
+    # ros2 launch your_package bringup_launch.py namespace:=scout1 use_namespace:=True
     params_file = ReplaceString(
         source_file=params_file,
         replacements={'<robot_namespace>': ('/', namespace)},
-        condition=IfCondition(use_namespace),
+        condition=IfCondition(use_namespace), # if use_namespace:=True during launch command
     )
 
     configured_params = ParameterFile(
@@ -153,6 +155,7 @@ def generate_launch_description():
                 remappings=remappings,
                 output='screen',
             ),
+            # IncludeLaunchDescription launches another launch file
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     os.path.join(launch_dir, 'slam_launch.py')
