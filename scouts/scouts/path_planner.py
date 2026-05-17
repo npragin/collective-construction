@@ -16,6 +16,8 @@ class Nav2ActionClient(Node):
     def __init__(self):
         super().__init__('nav2_action_client')
 
+        
+
         self.action_client = ActionClient(self, FollowWaypoints, 'follow_waypoints')
         self.send_goal()
 
