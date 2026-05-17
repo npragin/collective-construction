@@ -10,6 +10,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from PIL import Image
 from ament_index_python.packages import get_package_share_directory
 
 import rclpy
@@ -92,6 +93,40 @@ def rotation_matrix_to_quaternion(R: np.ndarray) -> tuple[float, float, float, f
     return float(x), float(y), float(z), float(w)
 
 
+def save_occ_grid_callback(msg):
+    width = msg.info.width
+    height = msg.info.height
+    
+    # Convert flat array to 2D numpy array
+    data = np.array(msg.data, dtype=np.int8).reshape((height, width))
+    
+    # Convert occupancy values to grayscale
+    # OccupancyGrid: 0=free, 100=occupied, -1=unknown
+    img = np.zeros((height, width), dtype=np.uint8)
+    img[data == 0]    = 255  # free → white
+    img[data == 100]  = 0    # occupied → black
+    img[data == -1]   = 205  # unknown → gray
+    
+    # Flip vertically (ROS uses bottom-left origin, image uses top-left)
+    img = np.flipud(img)
+    
+    # Save as PGM
+    Image.fromarray(img, mode='L').save('my_map.png')
+    
+    # Also save the yaml
+    res = msg.info.resolution
+    ox  = msg.info.origin.position.x
+    oy  = msg.info.origin.position.y
+    
+    with open('my_map.yaml', 'w') as f:
+        f.write(f"""image: my_map.pgm
+                resolution: {res}
+                origin: [{ox}, {oy}, 0.0]
+                negate: 0
+                occupied_thresh: 0.65
+                free_thresh: 0.25
+                """)
+
 class CcLocalizationNode(Node):
     """Detect ArUco frames and broadcast world/inner transforms on tf."""
 
@@ -101,16 +136,18 @@ class CcLocalizationNode(Node):
 
         self.declare_parameter("device_id", 42)
         self.declare_parameter("marker_size", 0.15)
-        self.declare_parameter("world_length", 2.0)
-        self.declare_parameter("world_width", 1.0)
+        self.declare_parameter("world_length", 7.0)
+        self.declare_parameter("world_width", 6.0)
         # build area
-        self.declare_parameter("inner_length", 0.3)
-        self.declare_parameter("inner_width", 0.3)
+        self.declare_parameter("inner_length", 1.5)
+        self.declare_parameter("inner_width", 1.5)
 
-        self.declare_parameter("stockpile_length", 0.1)
-        self.declare_parameter("stockpile_width", 0.15)
-        self.declare_parameter("koz_mask_resolution", 0.01)
+        self.declare_parameter("stockpile_length", 0.8)
+        self.declare_parameter("stockpile_width", 1.2)
+        self.declare_parameter("koz_mask_resolution", 0.05)
         self.declare_parameter("world_frame", "world")
+        # self.declare_parameter("world_frame", "map")
+
         self.declare_parameter("inner_frame", "build")
         self.declare_parameter("camera_frame", "camera")
         self.declare_parameter("tick_rate_hz", 30.0)
@@ -156,6 +193,7 @@ class CcLocalizationNode(Node):
             self.cap = None
 
         self.broadcaster = TransformBroadcaster(self)
+        # this is called in tick many times, 
         self.marker_pub = self.create_publisher(MarkerArray, "workspace_markers", 1)
         
         self.koz_pub = self.create_publisher(OccupancyGrid, "koz_mask", 1)
@@ -251,6 +289,10 @@ class CcLocalizationNode(Node):
         grid.info.origin.position.z = 0.0
         grid.info.origin.orientation.w = 1.0
         grid.data = mask.flatten().astype(np.int8).tolist()
+
+        save_occ_grid_callback(grid)
+
+
         return grid
 
     def tick(self) -> None:
@@ -350,9 +392,9 @@ class CcLocalizationNode(Node):
             # Simulated stockpile positions (hardcoded for sim)
             sl, sw = self.stockpile_dims
             stockpile_poses = {
-                8: (np.eye(3), np.array([0.5, 0.0+self.stockpile_dims[1]/2, 0.0])),
-                9: (np.eye(3), np.array([0.5+self.stockpile_dims[0], 0.0+self.stockpile_dims[1]/2, 0.0])),
-                10: (np.eye(3), np.array([0.5+self.stockpile_dims[0]*2, 0.0+self.stockpile_dims[1]/2, 0.0])),
+                8: (np.eye(3), np.array([self.inner_dims[0] + 1, 0.0+self.stockpile_dims[1]/2, 0.0])),
+                9: (np.eye(3), np.array([self.inner_dims[0] + 1 + self.stockpile_dims[0], 0.0+self.stockpile_dims[1]/2, 0.0])),
+                10: (np.eye(3), np.array([self.inner_dims[0] + 1 + self.stockpile_dims[0]*2, 0.0+self.stockpile_dims[1]/2, 0.0])),
             }
             
             for tid, (R_stock, t_stock) in stockpile_poses.items():
