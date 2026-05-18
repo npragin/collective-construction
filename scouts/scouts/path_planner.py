@@ -24,13 +24,21 @@ class Nav2ActionClient(Node):
     def send_goal(self):
         goal_msg = FollowWaypoints.Goal()
         
-        waypoint = PoseStamped()
-        waypoint.header.frame_id = 'map'
-        waypoint.pose.position.x = 2.0
-        waypoint.pose.position.y = 10.0
-        waypoint.pose.orientation.w = 1.0
-        goal_msg.poses = [waypoint]
-        
+        points = [(2.0, 10.0),
+                  (5.0, 10.0),
+                  (5.0, 15.0),
+                  (10.0, 15.0)]
+
+        for x, y in points:
+
+            waypoint = PoseStamped()
+            waypoint.header.frame_id = 'map'
+            waypoint.pose.position.x = x
+            waypoint.pose.position.y = y
+            waypoint.pose.orientation.w = 1.0
+
+            goal_msg.poses.append(waypoint)
+
         self.action_client.wait_for_server()
         future = self.action_client.send_goal_async(
             goal_msg, feedback_callback=self.feedback_callback)

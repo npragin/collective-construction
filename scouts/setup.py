@@ -29,6 +29,7 @@ setup(
         'console_scripts': [
             'path_planner_node = scouts.path_planner:main',
             'robot_tf = scouts.robot_tf:main',
+            'tf_relay = scouts.tf_relay:main',
         ],
     },
 )
