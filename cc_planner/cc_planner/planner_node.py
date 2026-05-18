@@ -567,7 +567,7 @@ class PlannerNode(Node):
                 child_node = self.dependency_graph[child_id]
                 if not child_node["placed"] and self._parents_placed(child_node):
                     child_type = child_node["block_type"]
-                    self.ready_blocks_by_type[child_type].append(child_id)
+                    self.ready_blocks_by_type.setdefault(child_type, deque[str]()).append(child_id)
                     self.get_logger().info(f"Block {child_id} is now dependency-ready")
 
             self.get_logger().info(f"{robot_id} placed block {block_id}")
