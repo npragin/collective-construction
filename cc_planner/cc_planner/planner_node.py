@@ -306,6 +306,10 @@ class PlannerNode(Node):
         goal.block = block
         goal.stockpile = stockpile
 
+        self.get_logger().info(
+            f"Assigned {goal.block.type}@({goal.block.pose.pose.position.x}, {goal.block.pose.pose.position.y}) to {robot_id}"
+        )
+
         send_future = client.send_goal_async(goal)
         send_future.add_done_callback(lambda f: self._on_retrieval_goal_response(f, robot_id))
         self.retrieval_in_flight[robot_id] = block
@@ -443,12 +447,13 @@ class PlannerNode(Node):
             and self._action_clients[robot_id].server_is_ready()
         ]
         if not idle_manipulators:
+            self.get_logger().info("No idle manipulators available to task")
             return
 
         for robot_id in idle_manipulators:
             block_id = self._reserve_placeable_block()
             if block_id is None:
-                self.get_logger().debug(f"No manipulator task available for {robot_id}")
+                self.get_logger().info(f"No manipulator task available for {robot_id}")
                 return
 
             block_node = self.dependency_graph[block_id]
@@ -521,6 +526,10 @@ class PlannerNode(Node):
         goal = ManipulationTask.Goal()
         goal.block = block
         goal.stockpile = stockpile
+
+        self.get_logger().info(
+            f"Assigned {goal.block.type}@({goal.block.pose.pose.position.x}, {goal.block.pose.pose.position.y}) to {robot_id}"
+        )
 
         send_future = client.send_goal_async(goal)
         send_future.add_done_callback(lambda f: self._on_manipulation_goal_response(f, robot_id))
