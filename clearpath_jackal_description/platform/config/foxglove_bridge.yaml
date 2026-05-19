@@ -14,7 +14,7 @@ j100_0897:
       max_qos_depth: 10
       num_threads: 0
       send_buffer_limit: 10000000
-      use_sim_time: False
+      use_sim_time: True
       capabilities: ['clientPublish', 'parameters', 'parametersSubscribe', 'services', 'connectionGraph', 'assets']
       include_hidden: True
       asset_uri_allowlist: ['^package://(?:[-\\w%]+/)*[-\\w%]+\\.(?:dae|fbx|glb|gltf|jpeg|jpg|mtl|obj|png|stl|tif|tiff|urdf|webp|xacro)$']

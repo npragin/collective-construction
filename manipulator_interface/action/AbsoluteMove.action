@@ -1,0 +1,10 @@
+geometry_msgs/PoseStamped pose
+string pilz_planner
+string planner
+string target_frame
+---
+bool success
+string message
+
+---
+string feedback

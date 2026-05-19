@@ -2,12 +2,14 @@ j100_0897:
   controller_manager:
     ros__parameters:
       update_rate: 50
-      use_sim_time: False
+      use_sim_time: True
       joint_state_broadcaster.type: 'joint_state_broadcaster/JointStateBroadcaster'
       platform_velocity_controller.type: 'diff_drive_controller/DiffDriveController'
+      arm_0_joint_trajectory_controller.type: 'joint_trajectory_controller/JointTrajectoryController'
+      arm_0_gripper_controller.type: 'position_controllers/GripperActionController'
   platform_velocity_controller:
     ros__parameters:
-      use_sim_time: False
+      use_sim_time: True
       left_wheel_names: ['front_left_wheel_joint', 'rear_left_wheel_joint']
       right_wheel_names: ['front_right_wheel_joint', 'rear_right_wheel_joint']
       wheel_separation: 0.37559
@@ -45,3 +47,20 @@ j100_0897:
       angular.z.max_deceleration_reverse: 4.0
       angular.z.max_jerk: nan
       angular.z.min_jerk: nan
+  arm_0_joint_trajectory_controller:
+    ros__parameters:
+      joints: ['arm_0_joint_1', 'arm_0_joint_2', 'arm_0_joint_3', 'arm_0_joint_4', 'arm_0_joint_5', 'arm_0_joint_6']
+      command_interfaces: ['position']
+      state_interfaces: ['position', 'velocity']
+      state_publish_rate: 100.0
+      action_monitor_rate: 20.0
+      allow_partial_joints_goal: False
+      constraints.stopped_velocity_tolerance: 0.0
+      constraints.goal_time: 0.0
+      use_sim_time: True
+  arm_0_gripper_controller:
+    ros__parameters:
+      default: True
+      joint: 'arm_0_gripper_right_finger_bottom_joint'
+      allow_stalling: True
+      use_sim_time: True

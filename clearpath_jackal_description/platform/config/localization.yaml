@@ -6,7 +6,7 @@ j100_0897:
       world_frame: 'odom'
       publish_tf: True
       two_d_mode: True
-      use_sim_time: False
+      use_sim_time: True
       print_diagnostics: True
       frequency: 50.0
       odom0: 'platform/odom'

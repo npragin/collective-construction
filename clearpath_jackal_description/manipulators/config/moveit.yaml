@@ -20,17 +20,17 @@ j100_0897:
       moveit_controller_manager: 'moveit_simple_controller_manager/MoveItSimpleControllerManager'
       moveit_manage_controllers: False
       moveit_simple_controller_manager:
-        controller_names: ['manipulators/arm_0_gripper_controller', 'manipulators/arm_0_joint_trajectory_controller']
-        manipulators/arm_0_gripper_controller:
+        arm_0_gripper_controller:
           action_ns: 'gripper_cmd'
           default: True
           joints: ['arm_0_gripper_right_finger_bottom_joint']
           type: 'GripperCommand'
-        manipulators/arm_0_joint_trajectory_controller:
+        arm_0_joint_trajectory_controller:
           action_ns: 'follow_joint_trajectory'
           default: True
           joints: ['arm_0_joint_1', 'arm_0_joint_2', 'arm_0_joint_3', 'arm_0_joint_4', 'arm_0_joint_5', 'arm_0_joint_6']
           type: 'FollowJointTrajectory'
+        controller_names: ['arm_0_gripper_controller', 'arm_0_joint_trajectory_controller']
       ompl:
         default_workspace_bounds: 10.0
         jiggle_fraction: 0.05
@@ -249,3 +249,4 @@ j100_0897:
         allowed_execution_duration_scaling: 1.2
         allowed_goal_duration_margin: 0.5
         allowed_start_tolerance: 0.01
+      use_sim_time: True
