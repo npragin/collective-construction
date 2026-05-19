@@ -347,10 +347,11 @@ class PlannerNode(Node):
         """
         Load the planned structure from rasterizer output.
 
-        Assumptions:
-        - The plan is its own frameless coordinate system whose origin
-          coincides with the build-site origin, so block positions are kept
-          unchanged and only relabeled into the build frame.
+        The structure is a 2D build plan. The rasterizer provides planned
+        block poses but does not provide dependency edges. The planner creates
+        access-based dependencies by placing more interior blocks earlier,
+        because already placed outer blocks can reduce the manipulator's access
+        to interior targets.
         """
         self.dependency_graph = {}
         self.ready_blocks_by_type = {}
@@ -372,13 +373,7 @@ class PlannerNode(Node):
                 "in_progress": False,
             }
 
-            # Placeholder code that creates a linear dependency graph in the order blocks appear
-            if index != 0:
-                self.dependency_graph[block_id]["parent_ids"] = [f"block_{index - 1}"]
-            if index != len(msg.blocks) - 1:
-                self.dependency_graph[block_id]["child_ids"] = [f"block_{index + 1}"]
-
-        # TODO: Construct dependency graph here.
+        self._construct_access_based_dependencies()
 
         for block_id, node in self.dependency_graph.items():
             if self._parents_placed(node):
@@ -390,6 +385,46 @@ class PlannerNode(Node):
             f"'{self._build_frame}' ({sum(len(q) for q in self.ready_blocks_by_type.values())} initially ready)"
         )
         self.allocate_manipulator_tasks()
+
+    def _construct_access_based_dependencies(self) -> None:
+        """Create access-based dependency edges for a 2D structure plan.
+
+        Since blocks are not stacked, dependencies are used to preserve
+        manipulator access rather than physical support. A simple first-pass
+        access heuristic is used: blocks closer to the geometric center of the
+        planned structure are treated as harder to access and are placed before
+        blocks farther from the center. This produces a deterministic dependency
+        chain from interior to exterior while allowing the rule to be replaced
+        later with a richer reachability test.
+        """
+        if len(self.dependency_graph) <= 1:
+            return
+
+        cx = sum(node["pose"].pose.position.x for node in self.dependency_graph.values()) / len(self.dependency_graph)
+        cy = sum(node["pose"].pose.position.y for node in self.dependency_graph.values()) / len(self.dependency_graph)
+
+        def access_sort_key(item: tuple[str, dict[str, Any]]) -> tuple[float, str]:
+            block_id, node = item
+            pose = node["pose"].pose.position
+            dist_sq = (pose.x - cx) ** 2 + (pose.y - cy) ** 2
+            return (dist_sq, block_id)
+
+        ordered_block_ids = [
+            block_id
+            for block_id, _node in sorted(self.dependency_graph.items(), key=access_sort_key)
+        ]
+
+        for node in self.dependency_graph.values():
+            node["parent_ids"] = []
+            node["child_ids"] = []
+
+        for parent_id, child_id in zip(ordered_block_ids, ordered_block_ids[1:], strict=False):
+            self.dependency_graph[parent_id]["child_ids"].append(child_id)
+            self.dependency_graph[child_id]["parent_ids"].append(parent_id)
+
+        self.get_logger().info(
+            "Constructed access-based dependency order: " + " -> ".join(ordered_block_ids)
+        )
 
     def _parents_placed(self, node: dict[str, Any]) -> bool:
         """Return True when every parent of the given graph node has been placed."""
