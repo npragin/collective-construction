@@ -372,13 +372,13 @@ class PlannerNode(Node):
                 "in_progress": False,
             }
 
-            # Placeholder code that creates a linear dependency graph in the order blocks appear
+            # Structure-order dependency: blocks are placed in the order provided by the rasterizer.
+            # For the 2D image-building case, dependencies encode access or planned
+            # placement order rather than vertical support.
             if index != 0:
                 self.dependency_graph[block_id]["parent_ids"] = [f"block_{index - 1}"]
             if index != len(msg.blocks) - 1:
                 self.dependency_graph[block_id]["child_ids"] = [f"block_{index + 1}"]
-
-        # TODO: Construct dependency graph here.
 
         for block_id, node in self.dependency_graph.items():
             if self._parents_placed(node):
