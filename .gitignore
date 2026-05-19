@@ -10,3 +10,7 @@ log/
 
 # Virtual environments
 .venv
+
+clearpath_jackal_description/sensors/*
+clearpath_jackal_description/manipulators/*
+clearpath_jackal_description/platform/*

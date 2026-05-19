@@ -9,8 +9,9 @@ system:
     namespace: j100_0897
     domain_id: 0
     middleware:
-      implementation: rmw_zenoh_cpp
-    workspaces: []
+      implementation: rmw_fastrtps_cpp
+    workspaces:
+      - /home/robot/ws/ros2_kinova/install/setup.bash
 
 platform:
   attachments:
@@ -65,7 +66,7 @@ sensors:
     ros_parameters:
       intel_realsense:
         camera_name: camera_0
-        device_type: d435
+        device_type: d435i
         serial_no: "138422076588"
         enable_color: true
         rgb_camera.profile: 640,480,30
@@ -89,21 +90,21 @@ sensors:
         laser_frame_id: lidar2d_0_laser
         ip_address: 192.168.131.20
         ip_port: 10940
-        angle_min: -3.141592653589793
-        angle_max: 3.141592653589793
-  - model: hokuyo_ust
-    urdf_enabled: true
-    launch_enabled: true
-    parent: rear_fender_mount
-    xyz: [0.0, 0.0, 0.0]
-    rpy: [0.0, 0.0, 3.1415]
-    ros_parameters:
-      urg_node:
-        laser_frame_id: lidar2d_1_laser
-        ip_address: 192.168.131.21
-        ip_port: 10940
-        angle_min: -3.141592653589793
-        angle_max: 3.141592653589793
+        angle_min: -1.25
+        angle_max: 1.25
+  # - model: hokuyo_ust
+  #   urdf_enabled: true
+  #   launch_enabled: true
+  #   parent: rear_fender_mount
+  #   xyz: [0.0, 0.0, 0.0]
+  #   rpy: [0.0, 0.0, 3.1415]
+  #   ros_parameters:
+  #     urg_node:
+  #       laser_frame_id: lidar2d_1_laser
+  #       ip_address: 192.168.131.21
+  #       ip_port: 10940
+  #       angle_min: -3.141592653589793
+  #       angle_max: 3.141592653589793
   # lidar3d:
   # - model: velodyne_lidar
   #   urdf_enabled: true
@@ -133,9 +134,8 @@ sensors:
         port: /dev/clearpath/um7
         frame_id: imu_0_link
         tf_ned_to_enu: true
-
 manipulators:
-  moviet: 
+  moveit: 
     enable: true
   arms:
     - model: kinova_gen3_lite
@@ -154,3 +154,4 @@ manipulators:
         poses:
           - name: custom
             joints: [0.0]
+
