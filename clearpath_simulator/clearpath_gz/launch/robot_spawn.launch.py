@@ -106,7 +106,8 @@ def launch_setup(context, *args, **kwargs):
             launch_arguments=[
                 ('setup_path', setup_path),
                 ('namespace', namespace),
-                ('use_sim_time', use_sim_time)]
+                ('use_sim_time', use_sim_time),
+                ('use_manipulation_controllers', 'true')]
         ),
 
         IncludeLaunchDescription(
