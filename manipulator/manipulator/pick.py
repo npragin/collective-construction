@@ -34,7 +34,7 @@ class Pick(Node):
         self.time = self.create_timer(0.03, self.timer_callback)
 
         #state params
-        self.state = "Test"
+        self.state = "start"
         self.latest_joint_state = None
         self.move_success = False
         self.sent_goal = False
@@ -45,11 +45,19 @@ class Pick(Node):
 
 
         self.gripper_offset = 0.335
-        self.test_pose = [-0.2, 0.2, 0.75, 0.0, 0.0, 0.0, 1.0]
+        self.test_pose = [0.46217, -0.030112, 0.13923, -0.055763, 0.9973, 0.0073431, 0.04721]
+        self.stow_pose = [0.21218, -0.075709, 0.41342, 0.72917, 0.016382, 0.68135, -0.061708]
 
 
 
     def timer_callback(self):
+        if self.state == "start":
+            if not self.sent_goal:
+                self.move_gripper("open")
+            if self.move_success:
+                self.state = "Test"
+                self.get_logger().info("Attemped to open gripper")
+                self.sent_goal = False
 
         if self.state == "Test":
             if not self.sent_goal:
@@ -63,8 +71,26 @@ class Pick(Node):
             if not self.sent_goal:
                 self.move_gripper("close")
             if self.move_success:
-                self.state = "stall"
+                self.state = "stow"
                 self.get_logger().info("Attemped to close gripper")
+                self.sent_goal = False
+
+        if self.state == "stow":
+            if not self.sent_goal:
+                move_pose = self.make_posestamped(self.stow_pose)
+                self.move_to_absolute_pose(move_pose, "ompl")
+            if self.move_success:
+                self.state = "open"
+                self.get_logger().info("Tested the command above")
+                self.sent_goal = False
+        if self.state == "open":
+            if not self.sent_goal:
+                self.move_gripper("open")
+            if self.move_success:
+                self.state = "stall"
+                self.get_logger().info("Attemped to open gripper")
+                self.sent_goal = False
+
 
     
     def goal_response_callback(self, future):
@@ -125,7 +151,7 @@ class Pick(Node):
         if direction == "close":
             goal_msg.command.position = 0.85
         else: 
-            goal_msg.command.position = 0
+            goal_msg.command.position = 0.0
         send_goal_future = self.gripper_client.send_goal_async(goal_msg)
         send_goal_future.add_done_callback(self.goal_response_callback)
         self.sent_goal = True
