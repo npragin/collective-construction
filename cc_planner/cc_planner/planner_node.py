@@ -353,9 +353,8 @@ class PlannerNode(Node):
 
         The structure is a 2D build plan. The rasterizer provides planned
         block poses but does not provide dependency edges. The planner creates
-        access-based dependencies by placing more interior blocks earlier,
-        because already placed outer blocks can reduce the manipulator's access
-        to interior targets.
+        corner-based dependencies by starting from the top-right planned
+        structure corner and placing blocks outward from that corner.
         """
         self.dependency_graph = {}
         self.ready_blocks_by_type = {}
@@ -377,7 +376,7 @@ class PlannerNode(Node):
                 "in_progress": False,
             }
 
-        self._construct_access_based_dependencies()
+        self._construct_top_right_corner_dependencies()
 
         for block_id, node in self.dependency_graph.items():
             if self._parents_placed(node):
@@ -390,32 +389,35 @@ class PlannerNode(Node):
         )
         self.allocate_manipulator_tasks()
 
-    def _construct_access_based_dependencies(self) -> None:
-        """Create access-based dependency edges for a 2D structure plan.
+    def _construct_top_right_corner_dependencies(self) -> None:
+        """Create corner-based dependency edges for a 2D structure plan.
 
-        Since blocks are not stacked, dependencies are used to preserve
-        manipulator access rather than physical support. A simple first-pass
-        access heuristic is used: blocks closer to the geometric center of the
-        planned structure are treated as harder to access and are placed before
-        blocks farther from the center. This produces a deterministic dependency
-        chain from interior to exterior while allowing the rule to be replaced
-        later with a richer reachability test.
+        Since blocks are not stacked, dependencies are used to impose a planned
+        2D placement order rather than physical support. The current rule starts
+        from the top-right corner of the planned structure. The block whose
+        centroid is closest to that top-right reference point is placed first,
+        followed by the next closest block, and so on. This produces a
+        deterministic dependency chain that works for irregular pixelated image
+        shapes without assuming a fixed grid size.
         """
         if len(self.dependency_graph) <= 1:
             return
 
-        cx = sum(node["pose"].pose.position.x for node in self.dependency_graph.values()) / len(self.dependency_graph)
-        cy = sum(node["pose"].pose.position.y for node in self.dependency_graph.values()) / len(self.dependency_graph)
+        corner_x = max(node["pose"].pose.position.x for node in self.dependency_graph.values())
+        corner_y = max(node["pose"].pose.position.y for node in self.dependency_graph.values())
 
-        def access_sort_key(item: tuple[str, dict[str, Any]]) -> tuple[float, str]:
+        def corner_sort_key(item: tuple[str, dict[str, Any]]) -> tuple[float, float, float, str]:
             block_id, node = item
             pose = node["pose"].pose.position
-            dist_sq = (pose.x - cx) ** 2 + (pose.y - cy) ** 2
-            return (dist_sq, block_id)
+            dist_sq = (pose.x - corner_x) ** 2 + (pose.y - corner_y) ** 2
+
+            # Tie-breakers keep the order deterministic. Prefer the block that
+            # is farther right, then farther up, then lexical block id.
+            return (dist_sq, -pose.x, -pose.y, block_id)
 
         ordered_block_ids = [
             block_id
-            for block_id, _node in sorted(self.dependency_graph.items(), key=access_sort_key)
+            for block_id, _node in sorted(self.dependency_graph.items(), key=corner_sort_key)
         ]
 
         for node in self.dependency_graph.values():
@@ -427,8 +429,9 @@ class PlannerNode(Node):
             self.dependency_graph[child_id]["parent_ids"].append(parent_id)
 
         self.get_logger().info(
-            "Constructed access-based dependency order: " + " -> ".join(ordered_block_ids)
+            "Constructed top-right corner dependency order: " + " -> ".join(ordered_block_ids)
         )
+
 
     def _parents_placed(self, node: dict[str, Any]) -> bool:
         """Return True when every parent of the given graph node has been placed."""
