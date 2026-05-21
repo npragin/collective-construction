@@ -10,6 +10,7 @@ from nav2_common.launch import ParseMultiRobotPose
 from launch.conditions import IfCondition
 
 from launch_ros.actions import Node
+from launch_ros.actions import PushRosNamespace
 
 
 
@@ -32,7 +33,9 @@ def generate_launch_description():
     autostart = LaunchConfiguration('autostart')
     use_sim_time = LaunchConfiguration('use_sim_time')
     log_settings = LaunchConfiguration('log_settings', default='true')
-
+    world = LaunchConfiguration('world', default='koz_map')
+    use_stamped_vel = LaunchConfiguration('use_stamped_velocity', default='false')
+    one_tf_tree = LaunchConfiguration('one_tf_tree', default='true')
 
     declare_map_yaml_cmd = DeclareLaunchArgument(
         'map',
@@ -43,12 +46,35 @@ def generate_launch_description():
         'params_file',
         # default_value='/home/liam-bouffard/Desktop/multiple_robot_systems/collective-construction/nav2_params.yaml',
         default_value='/home/liam-bouffard/Desktop/multiple_robot_systems/collective-construction/nav2_params.yaml',
-
     )
 
     declare_autostart_cmd = DeclareLaunchArgument(
         'autostart',
         default_value='true',
+    )
+
+    declare_use_sim_time_cmd = DeclareLaunchArgument(
+        'use_sim_time',
+        default_value='true',
+        description='Use simulation (Stage) time'
+    )
+
+    declare_world_cmd = DeclareLaunchArgument(
+        'world',
+        default_value='koz_map',
+        description='World file name (without .world extension)'
+    )
+
+    declare_one_tf_tree_cmd = DeclareLaunchArgument(
+        'one_tf_tree',
+        default_value='true',
+        description='Publish all transforms in a single TF tree'
+    )
+
+    declare_use_stamped_vel_cmd = DeclareLaunchArgument(
+        'use_stamped_velocity',
+        default_value='false',
+        description='Use stamped velocity messages'
     )
 
     """ParseMultiRobotPose bypasses the normal ROS2 launch argument system entirely — it reads directly from sys.argv (the raw command line) itself."""
@@ -91,6 +117,12 @@ def generate_launch_description():
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_autostart_cmd)
+    ld.add_action(declare_use_sim_time_cmd)
+    ld.add_action(declare_world_cmd)
+    ld.add_action(declare_one_tf_tree_cmd)
+    ld.add_action(declare_use_stamped_vel_cmd)
+    
+
     ld.add_action(LogInfo(msg=['number_of_robots=', str(len(robots_list))]))
 
     ld.add_action(LogInfo(msg=['number_of_robots=', str(len(robots_list))]))

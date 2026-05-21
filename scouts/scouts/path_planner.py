@@ -24,7 +24,6 @@ class Nav2ActionClient(Node):
         ]
         self.last_waypoint_index = -1
 
-        # Publish markers once, then send goal
         self.publish_markers(set(range(len(self.points))))
         self.send_goal()
 
