@@ -41,11 +41,15 @@ class PlannerNode(Node):
         self.declare_parameter("scout_report_topic", "scout_report")
         self.declare_parameter("retrieval_action_name", "retrieval_task")
         self.declare_parameter("manipulation_action_name", "manipulation_task")
+        self.declare_parameter("dependency_start_corner", "top_right")
 
         scout_report_topic = self.get_parameter("scout_report_topic").get_parameter_value().string_value
         self._retrieval_action_name = self.get_parameter("retrieval_action_name").get_parameter_value().string_value
         self._manipulation_action_name = (
             self.get_parameter("manipulation_action_name").get_parameter_value().string_value
+        )
+        self._dependency_start_corner = (
+            self.get_parameter("dependency_start_corner").get_parameter_value().string_value
         )
 
         self.declare_parameter("world_frame", "world")
@@ -372,7 +376,7 @@ class PlannerNode(Node):
                 "in_progress": False,
             }
 
-        self._construct_top_right_corner_dependencies()
+        self._construct_corner_based_dependencies()
 
         for block_id, node in self.dependency_graph.items():
             if self._parents_placed(node):
@@ -385,31 +389,55 @@ class PlannerNode(Node):
         )
         self.allocate_manipulator_tasks()
 
-    def _construct_top_right_corner_dependencies(self) -> None:
+    def _construct_corner_based_dependencies(self) -> None:
         """Create corner-based dependency edges for a 2D structure plan.
 
-        Since blocks are not stacked, dependencies are used to impose a planned
-        2D placement order rather than physical support. The current rule starts
-        from the top-right corner of the planned structure. The block whose
-        centroid is closest to that top-right reference point is placed first,
-        followed by the next closest block, and so on. This produces a
-        deterministic dependency chain that works for irregular pixelated image
-        shapes without assuming a fixed grid size.
+        Since blocks are not stacked, dependencies impose a planned 2D
+        placement order rather than physical support. The starting corner is
+        selected using the ``dependency_start_corner`` ROS 2 parameter. Valid
+        values are ``top_right``, ``top_left``, ``bottom_right``, and
+        ``bottom_left``. Blocks closest to the selected corner are placed
+        first, followed by the next closest blocks. This produces a
+        deterministic dependency chain that works for irregular pixelated
+        image shapes without assuming a fixed grid size.
         """
         if len(self.dependency_graph) <= 1:
             return
 
-        corner_x = max(node["pose"].pose.position.x for node in self.dependency_graph.values())
-        corner_y = max(node["pose"].pose.position.y for node in self.dependency_graph.values())
+        xs = [node["pose"].pose.position.x for node in self.dependency_graph.values()]
+        ys = [node["pose"].pose.position.y for node in self.dependency_graph.values()]
+
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+
+        valid_corners = {
+            "top_right": (max_x, max_y),
+            "top_left": (min_x, max_y),
+            "bottom_right": (max_x, min_y),
+            "bottom_left": (min_x, min_y),
+        }
+
+        corner_name = self._dependency_start_corner
+        if corner_name not in valid_corners:
+            self.get_logger().warn(
+                f"Invalid dependency_start_corner '{corner_name}'. "
+                "Using 'top_right'. Valid values are: "
+                + ", ".join(sorted(valid_corners))
+            )
+            corner_name = "top_right"
+
+        corner_x, corner_y = valid_corners[corner_name]
 
         def corner_sort_key(item: tuple[str, dict[str, Any]]) -> tuple[float, float, float, str]:
             block_id, node = item
             pose = node["pose"].pose.position
             dist_sq = (pose.x - corner_x) ** 2 + (pose.y - corner_y) ** 2
 
-            # Tie-breakers keep the order deterministic. Prefer the block that
-            # is farther right, then farther up, then lexical block id.
-            return (dist_sq, -pose.x, -pose.y, block_id)
+            # Tie-breakers keep the order deterministic and consistent with
+            # the selected corner.
+            x_tiebreak = -pose.x if "right" in corner_name else pose.x
+            y_tiebreak = -pose.y if "top" in corner_name else pose.y
+            return (dist_sq, x_tiebreak, y_tiebreak, block_id)
 
         ordered_block_ids = [
             block_id
@@ -425,7 +453,8 @@ class PlannerNode(Node):
             self.dependency_graph[child_id]["parent_ids"].append(parent_id)
 
         self.get_logger().info(
-            "Constructed top-right corner dependency order: " + " -> ".join(ordered_block_ids)
+            f"Constructed {corner_name} corner dependency order: "
+            + " -> ".join(ordered_block_ids)
         )
 
 
