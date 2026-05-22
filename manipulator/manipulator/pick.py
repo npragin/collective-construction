@@ -20,11 +20,14 @@ class Pick(Node):
 
         self.declare_parameter('namespace', "j100_0897")
         self.namespace = self.get_parameter("namespace").value
+        self.get_logger().info(f"Using namespace: {self.namespace}")
 
         self.absolute_move_client = ActionClient(self, AbsoluteMove, 'absolute_move')
         self.get_logger().info('Waiting for AbsoluteMove action server...')
         self.absolute_move_client.wait_for_server()
         self.get_logger().info('AbsoluteMove action server connected!')
+
+        self.get_logger().info(f"Gripper action:  /{self.namespace}/arm_0_gripper_controller/gripper_cmd")
 
         self.gripper_client = ActionClient(self, GripperCommand, f'/{self.namespace}/arm_0_gripper_controller/gripper_cmd')
         self.get_logger().info('Waiting for GripperCommand action server...')
