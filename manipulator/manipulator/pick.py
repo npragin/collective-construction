@@ -159,8 +159,7 @@ class Pick(Node):
         send_goal_future.add_done_callback(self.goal_response_callback)
         self.sent_goal = True
 
-
-        
+      
     def make_posestamped(self, pose_arr):
         """Build a pose stamped message from an array.
 
