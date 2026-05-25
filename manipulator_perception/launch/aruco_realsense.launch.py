@@ -36,9 +36,9 @@ def generate_launch_description():
         output="screen",
         parameters=[
             {
-                "color_topic": "/camera/camera/color/image_raw",
-                "depth_topic": "/camera/camera/aligned_depth_to_color/image_raw",
-                "camera_info_topic": "/camera/camera/color/camera_info",
+                "color_topic": "/j100_0897/sensors/camera_0/color/image",
+                "depth_topic": "/j100_0897/sensors/camera_0/depth/image",
+                "camera_info_topic": "/j100_0897/sensors/camera_0/color/camera_info",
                 "marker_size": 0.05,
                 "aruco_dictionary": "original",
                 "target_id": -1,
