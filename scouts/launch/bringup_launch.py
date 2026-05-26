@@ -37,6 +37,8 @@ def generate_launch_description():
     bringup_dir = get_package_share_directory('nav2_bringup')
     launch_dir = os.path.join(bringup_dir, 'launch')
 
+
+
     # Create the launch configuration variables
     namespace = LaunchConfiguration('namespace')
     use_namespace = LaunchConfiguration('use_namespace')
@@ -201,9 +203,9 @@ def generate_launch_description():
             # start up navigation.
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
-                    # os.path.join(launch_dir, 'navigation_launch.py')
+                    os.path.join(launch_dir, 'navigation_launch.py')
                     # TODO I hard coded this in
-                    '/home/liam-bouffard/Desktop/multiple_robot_systems/collective-construction/collective-construction/scouts/launch/navigation_launch.py'
+                    # '/home/liam-bouffard/Desktop/multiple_robot_systems/collective-construction/collective-construction/scouts/launch/navigation_launch.py'
                 ),
                 launch_arguments={
                     'namespace': namespace,
