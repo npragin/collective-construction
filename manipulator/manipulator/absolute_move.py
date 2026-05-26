@@ -52,7 +52,6 @@ import time
 class AbsoluteMoveNode(Node):
     def __init__(self):
         super().__init__('absolute_move_node')
-
         self.declare_parameter('namespace', "j100_0897")
         self.namespace = self.get_parameter('namespace').value
         
@@ -350,7 +349,7 @@ class AbsoluteMoveNode(Node):
         self.get_logger().info(f"Using planner: {planner}")
         if planner == "ompl":
             motion_request.planner_id = "RRTConnectkConfigDefault"
-            motion_request._pipeline_id = "ompl"
+            motion_request._pipeline_id = "_ompl"
         else:
             motion_request.planner_id = pilz_planner
             motion_request._pipeline_id = "pilz_industrial_motion_planner"

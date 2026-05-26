@@ -32,6 +32,7 @@ setup(
             'absolute_move = manipulator.absolute_move:main',
             'pick = manipulator.pick:main',
             'fsm = manipulator.fsm:main',
+            'test_fsm = manipulator.test_fsm:main',
         ],
     },
 )

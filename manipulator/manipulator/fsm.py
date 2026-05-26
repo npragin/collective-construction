@@ -14,6 +14,7 @@ from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 from manipulator_interface.action import TransportBlock
 from manipulator_interface.action import AbsoluteMove
 from control_msgs.action import GripperCommand
+import time
 
 class State(Enum):
 
@@ -30,7 +31,7 @@ class State(Enum):
 class Manipulator:
 
     def __init__(self, node):
-
+        
         self.node = node
         self.namespace = "j100_0897"
         self.target_frame = "arm_0_end_effector_link"
@@ -130,12 +131,21 @@ class RobotFSM(Node):
     def __init__(self):
 
         super().__init__('robot_fsm')
+        self.declare_parameter('namespace', "j100_0897")
+        self.namespace = self.get_parameter("namespace").value
+        self.get_logger().info(f"Using namespace: {self.namespace}")
 
-        self.navigator = BasicNavigator()
+        self.declare_parameter('manipulator_namespace', "j100_0897/manipulators")
+        self.manipulator_namespace = self.get_parameter("manipulator_namespace").value
+        self.get_logger().info(f"Using manipulator namespace: {self.manipulator_namespace}")
+
+
+        self.navigator = BasicNavigator(namespace=self.namespace)
         self.get_logger().info('Waiting for Nav2...')
-        self.navigator.waitUntilNav2Active()
+        self.navigator.waitUntilNav2Active(localizer="bt_navigator")
 
         self.manipulator = Manipulator(self)
+        self.manipulator.namespace = self.manipulator_namespace
         self.state = State.IDLE
 
         self.action_server = ActionServer(self,TransportBlock,'transport_block',execute_callback=self.execute_callback)
@@ -230,7 +240,8 @@ class RobotFSM(Node):
             if feedback:
                 self.get_logger().info('Robot navigating...')
 
-            await asyncio.sleep(0.5)
+            # await asyncio.sleep(0.5)
+            time.sleep(0.5)
 
         result = self.navigator.getResult()
 

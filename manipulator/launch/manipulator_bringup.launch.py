@@ -18,12 +18,25 @@ def generate_launch_description():
 
     namespace = LaunchConfiguration('namespace')
 
+    use_sim_time_arg = DeclareLaunchArgument(
+        'use_sim_time',
+        default_value='False',
+        description='Namespace move_group lives under.',
+    )
+
+    use_sim_time = LaunchConfiguration('use_sim_time')
+
+    
+
     absolute_move = Node(
         package='manipulator',
         executable='absolute_move',
         name='absolute_move',
         output='screen',
-        parameters=[{'namespace': namespace}],
+        parameters=[{
+            'namespace': namespace,
+            'use_sim_time': use_sim_time
+        }],
         remappings=[
             ('/tf', ['/', namespace, '/tf']),
             ('/tf_static', ['/', namespace, '/tf_static']),
@@ -32,5 +45,6 @@ def generate_launch_description():
 
     return LaunchDescription([
         namespace_arg,
+        use_sim_time_arg,
         absolute_move,
     ])
