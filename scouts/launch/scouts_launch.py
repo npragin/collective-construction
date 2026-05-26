@@ -30,6 +30,13 @@ realsense_launch = os.path.join(
     "rs_launch.py",
 )
 
+scouts_pkg_dir = get_package_share_directory('scouts')
+
+map_yaml = os.path.join(scouts_pkg_dir, 'nav2_files', 'map.yaml')
+
+nav2_params = os.path.join(scouts_pkg_dir, 'nav2_files', 'nav2_params.yaml')
+
+nav2_launch = os.path.join(scouts_pkg_dir, 'launch', 'bringup_launch.py')
 
 def generate_launch_description():
 
@@ -90,4 +97,15 @@ def generate_launch_description():
                 "enable_sync": "true",
             }.items(),
         ),
+
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(nav2_launch),
+            launch_arguments={
+                'map': map_yaml,
+                'params_file': nav2_params,
+                'use_namespace': 'True',
+                'namespace': namespace,
+                'use_localization': 'False',
+            }.items(),
+        )
     ])

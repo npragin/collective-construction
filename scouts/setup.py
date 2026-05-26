@@ -13,6 +13,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
+        ('share/scouts/nav2_files', glob('nav2_files/*')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
