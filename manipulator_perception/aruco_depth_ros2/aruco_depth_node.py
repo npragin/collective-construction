@@ -26,13 +26,13 @@ class ArucoDepthNode(Node):
         self.declare_parameter("depth_topic", "/j100_0897/sensors/camera_0/depth/image")
         self.declare_parameter("camera_info_topic", "/j100_0897/sensors/camera_0/color/camera_info")
 
-        self.declare_parameter("marker_size", 0.05)          # 50 mm = 0.05 m(the sixe of the aruco)
-        self.declare_parameter("aruco_dictionary", "original")
+        self.declare_parameter("marker_size", 0.10)          # 50 mm = 0.05 m(the sixe of the aruco)
+        self.declare_parameter("aruco_dictionary", "4x4_50")
         self.declare_parameter("target_id", -1)              # -1 means detect all ids
 
         self.declare_parameter("show_window", False)
-        self.declare_parameter("publish_tf", True)
-        self.declare_parameter("publish_rviz_markers", True)
+        self.declare_parameter("publish_tf", False)
+        self.declare_parameter("publish_rviz_markers", False)
         self.declare_parameter("arm_base_frame", "arm_0_base_link")
         self.declare_parameter("world_frame", "base_link")
 
