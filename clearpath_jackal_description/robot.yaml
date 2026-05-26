@@ -41,10 +41,16 @@ links:
   cylinder:
   - name: cylinder
     parent: default_mount
-    xyz: [0.0, 0.0, 0.05]
+    xyz: [-0.0254, 0.0, 0.04445]
     rpy: [0.0, 0.0, 0.0]
     radius: 0.05
-    length: 0.1
+    length: 0.0889
+  box:
+  - name: box
+    parent: default_mount
+    xyz: [0.1135, 0.0, 0.09525]
+    rpy: [0.0, 0.0, 0.0]
+    size: [0.1778, 0.4318, 0.1905]
 mounts:
   bracket:
   - parent: front_0_mount
@@ -103,8 +109,8 @@ sensors:
   #       laser_frame_id: lidar2d_1_laser
   #       ip_address: 192.168.131.21
   #       ip_port: 10940
-  #       angle_min: -3.141592653589793
-  #       angle_max: 3.141592653589793
+  #       angle_min: -1.25
+  #       angle_max: 1.25
   # lidar3d:
   # - model: velodyne_lidar
   #   urdf_enabled: true
@@ -140,7 +146,7 @@ manipulators:
   arms:
     - model: kinova_gen3_lite
       parent: default_mount
-      xyz: [0.0, 0.0, 0.0]
+      xyz: [-0.0254, 0.0, 0.0889]
       rpy: [0.0, 0.0, 0.0]
       ip: 192.168.1.10
       port: 10000

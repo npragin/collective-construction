@@ -24,9 +24,14 @@
 
   <!-- Links -->
 
+  <xacro:include filename="$(find clearpath_platform_description)/urdf/links/box.urdf.xacro"/>
+  <xacro:box name="box" parent_link="default_mount" size="0.1778 0.4318 0.1905">
+    <origin xyz="0.1135 0.0 0.09525" rpy="0.0 0.0 0.0"/>
+  </xacro:box>
+
   <xacro:include filename="$(find clearpath_platform_description)/urdf/links/cylinder.urdf.xacro"/>
-  <xacro:cylinder name="cylinder" parent_link="default_mount" radius="0.05" length="0.1">
-    <origin xyz="0.0 0.0 0.05" rpy="0.0 0.0 0.0"/>
+  <xacro:cylinder name="cylinder" parent_link="default_mount" radius="0.05" length="0.0889">
+    <origin xyz="-0.0254 0.0 0.04445" rpy="0.0 0.0 0.0"/>
   </xacro:cylinder>
 
 
@@ -53,6 +58,12 @@
     <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
   </xacro:hokuyo_ust>
 
+  <!-- lidar2d_1 -->
+  <xacro:include filename="$(find clearpath_sensors_description)/urdf/hokuyo_ust.urdf.xacro"/>
+  <xacro:hokuyo_ust name="lidar2d_1" parent_link="rear_fender_mount" ang_res="0.5" min_ang="-1.25" max_ang="1.25" min_range="0.05" max_range="25.0" update_rate="40">
+    <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 3.1415"/>
+  </xacro:hokuyo_ust>
+
   <!-- camera_0 -->
   <xacro:include filename="$(find clearpath_sensors_description)/urdf/intel_realsense.urdf.xacro"/>
   <xacro:intel_realsense name="camera_0" parent_link="front_fender_mount" update_rate="30" image_height="480" image_width="640" model="d435i">
@@ -71,7 +82,7 @@
   <!-- arm_0 -->
   <xacro:include filename="$(find clearpath_manipulators_description)/urdf/arm/kinova_gen3_lite.urdf.xacro"/>
   <xacro:kinova_gen3_lite name="arm_0" parent_link="default_mount" port="10000" robot_ip="192.168.1.10" use_internal_bus_gripper_comm="True" gripper_joint_name="arm_0_gripper_right_finger_bottom_joint">
-    <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+    <origin xyz="-0.0254 0.0 0.0889" rpy="0.0 0.0 0.0"/>
   </xacro:kinova_gen3_lite>
 
   <!-- arm_0_gripper -->
