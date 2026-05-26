@@ -1,13 +1,8 @@
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
-from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
-from launch.substitutions import PathJoinSubstitution
-from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-
     aruco_node = Node(
         package="aruco_depth_ros2",
         executable="aruco_depth_node",
@@ -25,11 +20,9 @@ def generate_launch_description():
                 "publish_rviz_markers": True,
                 "arm_base_frame": "arm_0_base_link",
                 "world_frame": "base_link",
-                "show_window": True,
+                "show_window": False,
             }
-        ]
+        ],
     )
 
-    return LaunchDescription([
-        aruco_node,
-    ])
+    return LaunchDescription([aruco_node])
