@@ -13,7 +13,6 @@ class Nav2ActionClient(Node):
         # self.marker_pub = self.create_publisher(MarkerArray, 'waypoint_markers', 10)
         self.marker_pub = self.create_publisher(MarkerArray, 'waypoints', 10)
 
-
         self.points = [
             (2.0, 7.0), (5.0, 7.0), (5.0, 18.0),
             (8.0, 18.0), (8.0, 7.0),

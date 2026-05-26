@@ -31,7 +31,8 @@ setup(
             'path_planner_node = scouts.path_planner:main',
             'robot_tf = scouts.robot_tf:main',
             'odom2base_tf = scouts.odom2base_tf:main',
-            'map2odom_tf = scouts.map2odom_tf:main'
+            'map2odom_tf = scouts.map2odom_tf:main',
+            'waypoint_server = scouts.waypoint_server:main',
         ],
     },
 )
