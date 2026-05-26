@@ -31,7 +31,6 @@ setup(
         'console_scripts': [
             'absolute_move = manipulator.absolute_move:main',
             'pick = manipulator.pick:main',
-            'add_collision_box = manipulator.add_collision_box:main',
             'fsm = manipulator.fsm:main',
         ],
     },
