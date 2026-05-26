@@ -201,7 +201,9 @@ def generate_launch_description():
             # start up navigation.
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
-                    os.path.join(launch_dir, 'navigation_launch.py')
+                    # os.path.join(launch_dir, 'navigation_launch.py')
+                    # TODO I hard coded this in
+                    '/home/liam-bouffard/Desktop/multiple_robot_systems/collective-construction/collective-construction/scouts/launch/navigation_launch.py'
                 ),
                 launch_arguments={
                     'namespace': namespace,
