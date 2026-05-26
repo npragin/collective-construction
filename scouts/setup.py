@@ -28,7 +28,7 @@ setup(
     entry_points={
         'console_scripts': [
             'path_planner_node = scouts.path_planner:main',
-            'robot_tf = scouts.robot_tf:main'
+            'robot_tf = scouts.robot_tf:main',
             'odom2base_tf = scouts.odom2base_tf:main'
         ],
     },
