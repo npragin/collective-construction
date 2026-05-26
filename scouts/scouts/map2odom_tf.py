@@ -8,7 +8,7 @@ from geometry_msgs.msg import TransformStamped
 class Map2Odom(Node):
 
     def __init__(self):
-        super().__init__('map2odom')
+        super().__init__('map2odom_tf')
 
         self.tf_broadcaster = TransformBroadcaster(self)
 
