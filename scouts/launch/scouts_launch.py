@@ -1,52 +1,69 @@
-
 from ament_index_python.packages import get_package_share_directory
-from launch_ros.actions import Node
+
+from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
 )
-from launch import LaunchDescription
-from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
+
+from launch_ros.actions import Node
+
+import os
 
 
-
-
-namespace = DeclareLaunchArgument(
-    'namespace',
-    default_value='sierra',
-    description='Namespace for the node'
+# Launch argument
+namespace_arg = DeclareLaunchArgument(
+    "namespace",
+    default_value="sierra",
+    description="Namespace for the robot",
 )
 
-namespace = LaunchConfiguration('namespace')
+namespace = LaunchConfiguration("namespace")
+
+# RealSense launch file
+realsense_pkg_dir = get_package_share_directory("realsense2_camera")
+realsense_launch = os.path.join(
+    realsense_pkg_dir,
+    "launch",
+    "rs_launch.py",
+)
 
 
 def generate_launch_description():
-    return LaunchDescription(
-        [   
-        namespace,
 
+    return LaunchDescription([
+        namespace_arg,
+
+        # map -> odom TF broadcaster
         Node(
-            package='scouts',
-            executable='map2odom_tf',
-            name='map2odomo_tf',
+            package="scouts",
+            executable="map2odom_tf",
+            name="map2odom_tf",
             namespace=namespace,
+            output="screen",
         ),
 
+        # odom -> base_link TF broadcaster
         Node(
-            package='scouts',
-            executbale='odom2base_tf',
-            name='odom2base_tf',
+            package="scouts",
+            executable="odom2base_tf",
+            name="odom2base_tf",
             namespace=namespace,
+            output="screen",
         ),
 
+        # Pioneer driver
         Node(
             package="rosaria2",
             executable="rosaria2_debug",
             name="rosaria2_node",
             namespace=namespace,
             output="screen",
-            remappings=[("pose", "odom")],
+            remappings=[
+                ("pose", "odom"),
+            ],
             parameters=[
                 {
                     "port": "/dev/ttyUSB0",
@@ -55,11 +72,16 @@ def generate_launch_description():
                     "tf_prefix": "rename_when_launching",
                 }
             ],
-            arguments=["--ros-args", "--log-level", "warn"],
+            arguments=[
+                "--ros-args",
+                "--log-level",
+                "warn",
+            ],
         ),
 
+        # RealSense camera
         IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(launch_file_path),
+            PythonLaunchDescriptionSource(realsense_launch),
             launch_arguments={
                 "initial_reset": "true",
                 "camera_namespace": namespace,
@@ -68,8 +90,4 @@ def generate_launch_description():
                 "enable_sync": "true",
             }.items(),
         ),
-
-        ]
-
-    )
-
+    ])
