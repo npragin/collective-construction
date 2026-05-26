@@ -3,8 +3,13 @@ from ament_index_python.packages import get_package_share_directory
 from launch_ros.actions import Node
 from launch.actions import (
     DeclareLaunchArgument,
+    IncludeLaunchDescription,
 )
 from launch import LaunchDescription
+from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+
+
 
 
 namespace = DeclareLaunchArgument(
@@ -25,12 +30,14 @@ def generate_launch_description():
             package='scouts',
             executable='map2odom_tf',
             name='map2odomo_tf',
+            namespace=namespace,
         ),
 
         Node(
             package='scouts',
             executbale='odom2base_tf',
             name='odom2base_tf',
+            namespace=namespace,
         ),
 
         Node(
