@@ -20,8 +20,6 @@ from rclpy.node import Node
 from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker, MarkerArray
 
-from cc_interfaces.msg import Stockpiles
-
 # Hard-coded tag ids per frame. Convention: counter-clockwise starting at origin
 # (origin -> +X -> +X+Y -> +Y). Edit here if the printed tags change.
 OUTER_TAG_IDS = (0, 1, 2, 3)

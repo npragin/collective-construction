@@ -12,4 +12,8 @@ log/
 .venv
 
 # generated files
+clearpath_jackal_description/sensors/*
+clearpath_jackal_description/manipulators/*
+clearpath_jackal_description/platform/*
+
 .vscode/

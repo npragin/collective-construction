@@ -85,6 +85,7 @@ def launch_setup(context, *args, **kwargs):
 
     # Directories
     pkg_clearpath_viz = FindPackageShare('clearpath_viz')
+    pkg_clearpath_platform_description = FindPackageShare('clearpath_platform_description')
 
     # Paths
     rviz_launch = PathJoinSubstitution(
@@ -93,8 +94,21 @@ def launch_setup(context, *args, **kwargs):
         setup_path, 'platform/launch', 'platform-service.launch.py'])
     launch_file_sensors_service = PathJoinSubstitution([
         setup_path, 'sensors/launch', 'sensors-service.launch.py'])
+    launch_file_description = PathJoinSubstitution([
+        pkg_clearpath_platform_description, 'launch', 'description.launch.py'])
 
     group_action_spawn_robot = GroupAction([
+
+        # robot_state_publisher — must run so /robot_description is published
+        # before ros_gz_sim's create node times out waiting on the topic.
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([launch_file_description]),
+            launch_arguments=[
+                ('setup_path', setup_path),
+                ('namespace', namespace),
+                ('use_sim_time', use_sim_time),
+                ('use_manipulation_controllers', 'true')]
+        ),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([launch_file_platform_service]),

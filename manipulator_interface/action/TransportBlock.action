@@ -1,0 +1,12 @@
+# Goal
+geometry_msgs/PoseStamped pickup_pose
+geometry_msgs/PoseStamped dropoff_pose
+
+---
+# Result
+bool success
+string message
+
+---
+# Feedback
+string current_state

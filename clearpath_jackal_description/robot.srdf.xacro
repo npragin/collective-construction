@@ -3,8 +3,22 @@
 
   <!-- Arms -->
 
+  <!-- arm_0 -->
+  <xacro:include filename="$(find clearpath_manipulators_description)/srdf/arm/kinova_gen3_lite.srdf.xacro"/>
+  <xacro:kinova_gen3_lite_group_state name="arm_0" group_state="custom" joint_positions="${[0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000]}"/>
+
+  <xacro:kinova_gen3_lite name="arm_0"/>
+
+
 
   <!-- Grippers -->
+
+  <!-- arm_0_gripper -->
+  <xacro:include filename="$(find clearpath_manipulators_description)/srdf/gripper/kinova_2f_lite.srdf.xacro"/>
+  <xacro:kinova_2f_lite_group_state name="arm_0_gripper" group_state="custom" joint_positions="${[0.0000]}"/>
+
+  <xacro:kinova_2f_lite name="arm_0_gripper"/>
+
 
 
   <!-- Lifts -->
