@@ -68,8 +68,8 @@ class WaypointServer(Node):
 
             self.goal_pose = goal
 
-            while distance > 0.05:
-                
+            while distance > 0.1:
+
                 self.lookup_transform()
 
                 self.get_logger().info(f'goal: {goal}')
@@ -143,15 +143,15 @@ class WaypointServer(Node):
 
 def main():
     rclpy.init()
-
     node = WaypointServer()
 
-    executer = MultiThreadedExecutor(num_threads=4)
-    executer.add_node(node)
-    executer.spin()
-
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':
