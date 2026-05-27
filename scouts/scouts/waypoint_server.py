@@ -50,10 +50,10 @@ class WaypointServer(Node):
 
 
 
-        # self.control_timer = self.create_timer(
-        #     0.1,
-        #     self.control_loop
-        # )
+        self.control_timer = self.create_timer(
+            0.1,
+            self.control_loop
+        )
             
 
 
@@ -97,7 +97,7 @@ class WaypointServer(Node):
             
                 self.cmd_pub.publish(msg)
                 self.get_logger().info('---------------------')
-                
+
 
             msg = Twist()  # all zeros
             self.cmd_pub.publish(msg)
