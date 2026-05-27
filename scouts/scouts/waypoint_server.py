@@ -145,7 +145,7 @@ def main():
 
     executer = MultiThreadedExecutor(num_threads=4)
     executer.add_node(node)
-    executer.spin(node)
+    executer.spin()
 
     node.destroy_node()
     rclpy.shutdown()
