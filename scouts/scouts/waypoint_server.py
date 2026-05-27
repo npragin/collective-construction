@@ -87,7 +87,7 @@ class WaypointServer(Node):
         self.cmd_pub.publish(msg)
         self.get_logger().info('---------------------')
 
-        if distance < 0.2:
+        if distance < 0.15:
             msg = Twist()  # all zeros
             self.cmd_pub.publish(msg)
 
@@ -97,6 +97,7 @@ class WaypointServer(Node):
             if self.goal_idx >= len(self.goal_list):
                 self.control_timer.cancel()
                 self.get_logger().info(f'All goals are completed!')
+                return
 
             self.goal = self.goal_list[self.goal_idx]
 
