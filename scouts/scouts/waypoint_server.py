@@ -47,7 +47,7 @@ class WaypointServer(Node):
                           (0.4, 0.75)]
 
         self.goal_idx = 0
-        self.goal_pose = self.goal_list[self.goal_idx]
+        self.goal = self.goal_list[self.goal_idx]
 
         self.control_timer = self.create_timer(
             0.1,
@@ -58,11 +58,13 @@ class WaypointServer(Node):
     
         if None in self.robot:
             return
+        
+
 
         self.get_logger().info(f'goal: {goal}')
         self.get_logger().info(f'robot: [{self.robot[0]}, {self.robot[1]}, {self.robot[2]}')
-        dx = self.goal_pose[0] - self.robot[0]
-        dy = self.goal_pose[1] - self.robot[1]
+        dx = self.goal[0] - self.robot[0]
+        dy = self.goal[1] - self.robot[1]
     
         distance = np.hypot(dx, dy)
         self.get_logger().info(f'distance: {distance}')
@@ -91,7 +93,7 @@ class WaypointServer(Node):
 
             self.get_logger().info(f'Goal {goal} reached!')
             self.goal_idx += 1
-            self.goal_pose = self.goal_list[self.goal_idx]
+            self.goal = self.goal_list[self.goal_idx]
 
             
 
