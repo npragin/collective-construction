@@ -653,17 +653,22 @@ class ArucoDepthNode(Node):
     def transform_pose(self, pose_msg, target_frame):
         try:
             transform = self.tf_buffer.lookup_transform(
-                target_frame,
-                pose_msg.header.frame_id,
-                rclpy.time.Time(),
+                target_frame,                 # where you want the pose
+                pose_msg.header.frame_id,      # where the pose currently is
+                rclpy.time.Time(),             # latest available transform
+                timeout=Duration(seconds=0.2)
             )
+
             transformed = do_transform_pose(pose_msg, transform)
             transformed.header.stamp = pose_msg.header.stamp
             transformed.header.frame_id = target_frame
+
             return transformed
+
         except TransformException as ex:
-            self.get_logger().debug(
-                f"Could not transform {pose_msg.header.frame_id} to {target_frame}: {ex}"
+            self.get_logger().warn(
+                f"Could not transform from '{pose_msg.header.frame_id}' "
+                f"to '{target_frame}': {ex}"
             )
             return None
 
