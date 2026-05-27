@@ -42,12 +42,12 @@ class WaypointServer(Node):
         self.robot = [None, None, None] # x, y, theta
 
 
-        self.goal_list = [(0.2, 1.5),
-                          (0.6, 1.5),
+        self.goal_list = [(0.2, 3.0),
+                          (0.6, 3.0),
                           (0.6, 0.25),
                           (1.0, 0.25),
-                          (1.0, 1.5),
-                          (1.4, 1.5)]
+                          (1.0, 3.0),
+                          (1.4, 3.0)]
 
         self.goal_idx = 0
         self.goal = self.goal_list[self.goal_idx]
@@ -62,8 +62,6 @@ class WaypointServer(Node):
         if None in self.robot:
             return
         
-
-
         self.get_logger().info(f'goal: {self.goal}')
         self.get_logger().info(f'robot: [{self.robot[0]}, {self.robot[1]}, {self.robot[2]}')
         dx = self.goal[0] - self.robot[0]
@@ -84,7 +82,7 @@ class WaypointServer(Node):
     
         msg = Twist()
     
-        msg.linear.x = min(0.1, distance*2)
+        msg.linear.x = min(0.1, distance) * 2
         msg.angular.z = heading_error * 0.5
     
         self.cmd_pub.publish(msg)
