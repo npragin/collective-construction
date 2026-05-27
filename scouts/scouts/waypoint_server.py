@@ -87,7 +87,7 @@ class WaypointServer(Node):
         self.cmd_pub.publish(msg)
         self.get_logger().info('---------------------')
 
-        if distance < 0.1:
+        if distance < 0.2:
             msg = Twist()  # all zeros
             self.cmd_pub.publish(msg)
 
