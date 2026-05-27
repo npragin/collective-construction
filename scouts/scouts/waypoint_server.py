@@ -61,7 +61,7 @@ class WaypointServer(Node):
         
 
 
-        self.get_logger().info(f'goal: {goal}')
+        self.get_logger().info(f'goal: {self.goal}')
         self.get_logger().info(f'robot: [{self.robot[0]}, {self.robot[1]}, {self.robot[2]}')
         dx = self.goal[0] - self.robot[0]
         dy = self.goal[1] - self.robot[1]
@@ -91,7 +91,7 @@ class WaypointServer(Node):
             msg = Twist()  # all zeros
             self.cmd_pub.publish(msg)
 
-            self.get_logger().info(f'Goal {goal} reached!')
+            self.get_logger().info(f'Goal {self.goal} reached!')
             self.goal_idx += 1
             self.goal = self.goal_list[self.goal_idx]
 
