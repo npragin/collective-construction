@@ -34,7 +34,7 @@ class WaypointServer(Node):
 
         self.cmd_pub = self.create_publisher(
             Twist,
-            'sierra/cmd_vel',
+            'cmd_vel',
             10,
         )
 
