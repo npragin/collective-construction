@@ -46,65 +46,53 @@ class WaypointServer(Node):
                           (0.4, 1.5),
                           (0.4, 0.75)]
 
-        self.goal_pose = (None, None)
-
-
+        self.goal_idx = 0
+        self.goal_pose = self.goal_list[self.goal_idx]
 
         self.control_timer = self.create_timer(
             0.1,
             self.control_loop
         )
-            
-
-
 
     def control_loop(self):
     
         if None in self.robot:
             return
+
+        self.get_logger().info(f'goal: {goal}')
+        self.get_logger().info(f'robot: [{self.robot[0]}, {self.robot[1]}, {self.robot[2]}')
+        dx = self.goal_pose[0] - self.robot[0]
+        dy = self.goal_pose[1] - self.robot[1]
     
-        distance = float('inf')
-        for goal in self.goal_list:
+        distance = np.hypot(dx, dy)
+        self.get_logger().info(f'distance: {distance}')
+    
+        desired_heading = np.arctan2(dy, dx)
+        self.get_logger().info(f'desired_heading: {desired_heading}')
 
-            self.goal_pose = goal
+        heading_error = desired_heading - self.robot[2]
+    
+        heading_error = np.arctan2(
+            np.sin(heading_error),
+            np.cos(heading_error)
+        )
+    
+        msg = Twist()
+    
+        msg.linear.x = min(0.3, distance)
+        msg.angular.z = heading_error * 0.5
+    
+        self.cmd_pub.publish(msg)
+        self.get_logger().info('---------------------')
 
-            while distance > 0.1:
-
-                self.lookup_transform()
-
-                self.get_logger().info(f'goal: {goal}')
-                self.get_logger().info(f'robot: [{self.robot[0]}, {self.robot[1]}, {self.robot[2]}')
-                dx = self.goal_pose[0] - self.robot[0]
-                dy = self.goal_pose[1] - self.robot[1]
-            
-                distance = np.hypot(dx, dy)
-                self.get_logger().info(f'distance: {distance}')
-            
-                desired_heading = np.arctan2(dy, dx)
-                self.get_logger().info(f'desired_heading: {desired_heading}')
-
-                heading_error = desired_heading - self.robot[2]
-            
-                heading_error = np.arctan2(
-                    np.sin(heading_error),
-                    np.cos(heading_error)
-                )
-            
-                msg = Twist()
-            
-                msg.linear.x = min(0.3, distance)
-                msg.angular.z = heading_error * 0.5
-            
-                self.cmd_pub.publish(msg)
-                self.get_logger().info('---------------------')
-
-
+        if distance < 0.1:
             msg = Twist()  # all zeros
             self.cmd_pub.publish(msg)
 
-            # self.control_timer.cancel()
-            
             self.get_logger().info(f'Goal {goal} reached!')
+            self.goal_idx += 1
+            self.goal_pose = self.goal_list[self.goal_idx]
+
             
 
 
