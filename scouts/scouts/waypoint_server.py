@@ -93,6 +93,11 @@ class WaypointServer(Node):
 
             self.get_logger().info(f'Goal {self.goal} reached!')
             self.goal_idx += 1
+
+            if self.goal_idx >= len(self.goal_list):
+                self.control_timer.cancel()
+                self.get_logger().info(f'All goals are completed!')
+
             self.goal = self.goal_list[self.goal_idx]
 
             
