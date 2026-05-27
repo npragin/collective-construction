@@ -89,12 +89,12 @@ def generate_launch_description():
             }.items(),
         ),
 
-        Node(
-            package="scouts",
-            executable="waypoint_server",
-            name="waypoint_server",
-            namespace=namespace,
-            output="screen",
-        ),
+        # Node(
+        #     package="scouts",
+        #     executable="waypoint_server",
+        #     name="waypoint_server",
+        #     namespace=namespace,
+        #     output="screen",
+        # ),
 
     ])
