@@ -125,9 +125,9 @@ class WaypointServer(Node):
             qz = transform.transform.rotation.z
             qw = transform.transform.rotation.w
 
-            # self.get_logger().info(
-            #     f"x={x:.2f}, y={y:.2f}, yaw quaternion=({qx:.2f}, {qy:.2f}, {qz:.2f}, {qw:.2f})"
-            # )
+            self.get_logger().info(
+                f"x={x:.2f}, y={y:.2f}, yaw quaternion=({qx:.2f}, {qy:.2f}, {qz:.2f}, {qw:.2f})"
+            )
 
             self.robot[0] = x
             self.robot[1] = y
