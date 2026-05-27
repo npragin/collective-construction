@@ -74,7 +74,7 @@ class WaypointServer(Node):
     
         self.cmd_pub.publish(msg)
         
-        self.get_logger().info(f'Goal {goal_pose} reached!')
+        self.get_logger().info(f'Goal {self.goal_pose} reached!')
 
 
 
