@@ -97,6 +97,7 @@ class WaypointServer(Node):
             
                 self.cmd_pub.publish(msg)
                 self.get_logger().info('---------------------')
+                
 
             msg = Twist()  # all zeros
             self.cmd_pub.publish(msg)
@@ -113,6 +114,7 @@ class WaypointServer(Node):
     def lookup_transform(self):
 
         try:
+            self.get_logger().info("Getting robot pose ...")
             transform = self.tf_buffer.lookup_transform(
                 'map',        # target frame
                 'sierra/base_link',  # source frame
