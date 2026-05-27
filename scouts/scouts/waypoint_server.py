@@ -44,7 +44,8 @@ class WaypointServer(Node):
         self.goal_list = [(0.2, 1.5),
                           (0.4, 1.5),
                           (0.4, 0.75)]
-        self.goal_pose = [2.0, 2.0]
+
+        self.goal_pose = (None, None)
 
 
 
@@ -61,8 +62,9 @@ class WaypointServer(Node):
     
         distance = float('inf')
         for goal in self.goal_list:
+            self.goal_pose = goal
 
-            while distance < 0.05:
+            while distance > 0.05:
 
                 self.get_logger().info(f'robot: [{self.robot[0]}, {self.robot[1]}, {self.robot[2]}')
                 dx = self.goal_pose[0] - self.robot[0]
