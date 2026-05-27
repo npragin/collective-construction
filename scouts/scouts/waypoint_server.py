@@ -44,7 +44,7 @@ class WaypointServer(Node):
 
 
 
-    def goal(self, goal_pose: List[Float]):
+    def goal(self, goal_pose):
 
         distance = float('inf')
         heading_error = np.pi
