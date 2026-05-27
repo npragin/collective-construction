@@ -59,6 +59,7 @@ class WaypointServer(Node):
         if None in self.robot:
             return
     
+        distance = float('inf')
         for goal in self.goal_list:
 
             while distance < 0.05:
@@ -90,7 +91,7 @@ class WaypointServer(Node):
 
             msg = Twist()  # all zeros
             self.cmd_pub.publish(msg)
-            
+
             # self.control_timer.cancel()
             
             self.get_logger().info(f'Goal {goal} reached!')
