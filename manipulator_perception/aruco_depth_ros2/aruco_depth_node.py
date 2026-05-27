@@ -1,30 +1,29 @@
 #!/usr/bin/env python3
 
-#Seg Fault Debug
-import os
+"""
+aruco_depth_node.py
+
+Single-file ROS 2 ArUco + depth node with OpenCV ArUco compatibility.
+
+Designed to work with:
+- OpenCV 4.6.x legacy ArUco API:
+    cv2.aruco.DetectorParameters_create()
+    cv2.aruco.detectMarkers()
+
+- Newer OpenCV 4.x API, including 4.11.x:
+    cv2.aruco.DetectorParameters()
+    cv2.aruco.ArucoDetector()
+
+This keeps OpenCV-version-specific logic inside OpenCVArucoCompat.
+"""
+
 import sys
 import faulthandler
 
 faulthandler.enable(file=sys.stderr, all_threads=True)
 
-print("[BOOT] Python executable:", sys.executable, flush=True)
-print("[BOOT] Python version:", sys.version, flush=True)
-print("[BOOT] DISPLAY:", os.environ.get("DISPLAY"), flush=True)
-print("[BOOT] WAYLAND_DISPLAY:", os.environ.get("WAYLAND_DISPLAY"), flush=True)
-
 import cv2
 import numpy as np
-
-print("[BOOT] cv2 version:", cv2.__version__, flush=True)
-print("[BOOT] cv2 file:", cv2.__file__, flush=True)
-
-try:
-    build_info = cv2.getBuildInformation()
-    for line in build_info.splitlines():
-        if "GUI:" in line or "GTK" in line or "QT" in line:
-            print("[BOOT] OpenCV build:", line, flush=True)
-except Exception as e:
-    print("[BOOT] Could not read OpenCV build info:", e, flush=True)
 
 import rclpy
 from rclpy.node import Node
@@ -41,25 +40,179 @@ from tf2_geometry_msgs import do_transform_pose
 from tf2_ros import Buffer, TransformBroadcaster, TransformException, TransformListener
 
 
+class OpenCVArucoCompat:
+    """
+    Small compatibility adapter for OpenCV ArUco API differences.
+
+    OpenCV 4.6 often uses:
+        DetectorParameters_create()
+        detectMarkers()
+
+    Newer OpenCV versions may use:
+        DetectorParameters()
+        ArucoDetector().detectMarkers()
+    """
+
+    DICTIONARIES = {
+        "original": "DICT_ARUCO_ORIGINAL",
+        "4x4_50": "DICT_4X4_50",
+        "4x4_100": "DICT_4X4_100",
+        "4x4_250": "DICT_4X4_250",
+        "4x4_1000": "DICT_4X4_1000",
+        "5x5_50": "DICT_5X5_50",
+        "5x5_100": "DICT_5X5_100",
+        "5x5_250": "DICT_5X5_250",
+        "5x5_1000": "DICT_5X5_1000",
+        "6x6_50": "DICT_6X6_50",
+        "6x6_100": "DICT_6X6_100",
+        "6x6_250": "DICT_6X6_250",
+        "6x6_1000": "DICT_6X6_1000",
+        "7x7_50": "DICT_7X7_50",
+        "7x7_100": "DICT_7X7_100",
+        "7x7_250": "DICT_7X7_250",
+        "7x7_1000": "DICT_7X7_1000",
+    }
+
+    def __init__(self, dictionary_name="4x4_50", logger=None):
+        self.logger = logger
+
+        if not hasattr(cv2, "aruco"):
+            raise RuntimeError(
+                "This OpenCV build does not include cv2.aruco. "
+                "Install an OpenCV build with ArUco support, usually opencv-contrib."
+            )
+
+        self.aruco = cv2.aruco
+        self.dictionary = self._create_dictionary(dictionary_name)
+        self.parameters = self._create_detector_parameters()
+        self.detector = self._create_new_detector_if_available()
+
+        if self.logger is not None:
+            mode = "ArucoDetector API" if self.detector is not None else "legacy detectMarkers API"
+            self.logger.info(f"OpenCV version: {cv2.__version__}")
+            self.logger.info(f"OpenCV file: {cv2.__file__}")
+            self.logger.info(f"Using ArUco mode: {mode}")
+
+    def _create_dictionary(self, name):
+        if name not in self.DICTIONARIES:
+            if self.logger is not None:
+                self.logger.warn(f"Unknown ArUco dictionary '{name}', falling back to '4x4_50'")
+            name = "4x4_50"
+
+        dict_attr_name = self.DICTIONARIES[name]
+
+        if not hasattr(self.aruco, dict_attr_name):
+            raise RuntimeError(
+                f"cv2.aruco is missing dictionary constant '{dict_attr_name}'. "
+                "Your OpenCV ArUco module may be incomplete."
+            )
+
+        dict_id = getattr(self.aruco, dict_attr_name)
+
+        if hasattr(self.aruco, "getPredefinedDictionary"):
+            return self.aruco.getPredefinedDictionary(dict_id)
+
+        if hasattr(self.aruco, "Dictionary_get"):
+            return self.aruco.Dictionary_get(dict_id)
+
+        raise RuntimeError(
+            "Could not create ArUco dictionary. "
+            "Neither getPredefinedDictionary() nor Dictionary_get() exists."
+        )
+
+    def _create_detector_parameters(self):
+        if hasattr(self.aruco, "DetectorParameters"):
+            return self.aruco.DetectorParameters()
+
+        if hasattr(self.aruco, "DetectorParameters_create"):
+            return self.aruco.DetectorParameters_create()
+
+        raise RuntimeError(
+            "Could not create ArUco detector parameters. "
+            "Neither DetectorParameters() nor DetectorParameters_create() exists."
+        )
+
+    def _create_new_detector_if_available(self):
+        if not hasattr(self.aruco, "ArucoDetector"):
+            return None
+
+        try:
+            return self.aruco.ArucoDetector(self.dictionary, self.parameters)
+        except Exception as exc:
+            if self.logger is not None:
+                self.logger.warn(
+                    f"ArucoDetector exists but failed to initialize. "
+                    f"Falling back to legacy detectMarkers(). Error: {exc}"
+                )
+            return None
+
+    def detect_markers(self, gray_image):
+        if self.detector is not None:
+            return self.detector.detectMarkers(gray_image)
+
+        if not hasattr(self.aruco, "detectMarkers"):
+            raise RuntimeError(
+                "cv2.aruco.detectMarkers() is missing and ArucoDetector is unavailable."
+            )
+
+        return self.aruco.detectMarkers(
+            gray_image,
+            self.dictionary,
+            parameters=self.parameters
+        )
+
+    def draw_detected_markers(self, image, corners, ids):
+        if ids is None or corners is None or len(corners) == 0:
+            return
+
+        if hasattr(self.aruco, "drawDetectedMarkers"):
+            self.aruco.drawDetectedMarkers(image, corners, ids)
+
+    def draw_axes(self, image, camera_matrix, dist_coeffs, rvec, tvec, axis_length):
+        if hasattr(cv2, "drawFrameAxes"):
+            cv2.drawFrameAxes(
+                image,
+                camera_matrix,
+                dist_coeffs,
+                rvec,
+                tvec,
+                axis_length
+            )
+            return
+
+        # Very old fallback. Usually unnecessary for OpenCV 4.6+.
+        if hasattr(self.aruco, "drawAxis"):
+            self.aruco.drawAxis(
+                image,
+                camera_matrix,
+                dist_coeffs,
+                rvec,
+                tvec,
+                axis_length
+            )
+
 
 class ArucoDepthNode(Node):
     def __init__(self):
         super().__init__("aruco_depth_node")
 
-      
         self.declare_parameter("color_topic", "/j100_0897/sensors/camera_0/color/image")
         self.declare_parameter("depth_topic", "/j100_0897/sensors/camera_0/depth/image")
         self.declare_parameter("camera_info_topic", "/j100_0897/sensors/camera_0/color/camera_info")
 
-        self.declare_parameter("marker_size", 0.10)          # 50 mm = 0.05 m(the sixe of the aruco)
+        self.declare_parameter("marker_size", 0.10)
         self.declare_parameter("aruco_dictionary", "4x4_50")
-        self.declare_parameter("target_id", -1)              # -1 means detect all ids
+        self.declare_parameter("target_id", -1)
 
         self.declare_parameter("show_window", False)
         self.declare_parameter("publish_tf", False)
         self.declare_parameter("publish_rviz_markers", False)
+
+        # Use the arm base as the default target frame.
+        # Override at runtime if needed:
+        #   -p arm_base_frame:=base_link
         self.declare_parameter("arm_base_frame", "base_link")
-        self.declare_parameter("world_frame", "base_link") #pending link name
+        self.declare_parameter("world_frame", "base_link") #pending
 
         self.color_topic = self.get_parameter("color_topic").value
         self.depth_topic = self.get_parameter("depth_topic").value
@@ -74,10 +227,10 @@ class ArucoDepthNode(Node):
         self.publish_rviz_markers_enabled = bool(
             self.get_parameter("publish_rviz_markers").value
         )
+
         self.arm_base_frame = self.get_parameter("arm_base_frame").value
         self.world_frame = self.get_parameter("world_frame").value
 
-       
         self.bridge = CvBridge()
 
         self.latest_depth_image = None
@@ -86,23 +239,11 @@ class ArucoDepthNode(Node):
         self.camera_matrix = None
         self.dist_coeffs = None
 
-        
-        self.aruco_dict = self.get_aruco_dictionary(self.aruco_dictionary_name)
+        self.aruco_backend = OpenCVArucoCompat(
+            dictionary_name=self.aruco_dictionary_name,
+            logger=self.get_logger()
+        )
 
-        if hasattr(cv2.aruco, "DetectorParameters"):
-            self.aruco_params = cv2.aruco.DetectorParameters()
-        else:
-            self.aruco_params = cv2.aruco.DetectorParameters_create()
-
-        if hasattr(cv2.aruco, "ArucoDetector"):
-            self.detector = cv2.aruco.ArucoDetector(
-                self.aruco_dict,
-                self.aruco_params
-            )
-        else:
-            self.detector = None
-
-        
         self.color_sub = self.create_subscription(
             Image,
             self.color_topic,
@@ -124,7 +265,6 @@ class ArucoDepthNode(Node):
             qos_profile_sensor_data
         )
 
-       
         self.debug_image_pub = self.create_publisher(
             Image,
             "/aruco/debug_image",
@@ -142,17 +282,24 @@ class ArucoDepthNode(Node):
             "/aruco/poses/camera_frame",
             10
         )
+
         self.pose_array_arm_pub = self.create_publisher(
             PoseArray,
             "/aruco/poses/arm_base_frame",
             10
         )
+
         self.pose_array_world_pub = self.create_publisher(
             PoseArray,
             "/aruco/poses/world_frame",
             10
         )
-        self.marker_ids_pub = self.create_publisher(Int32MultiArray, "/aruco/marker_ids", 10)
+
+        self.marker_ids_pub = self.create_publisher(
+            Int32MultiArray,
+            "/aruco/marker_ids",
+            10
+        )
 
         self.marker_array_pub = self.create_publisher(
             MarkerArray,
@@ -160,69 +307,31 @@ class ArucoDepthNode(Node):
             10
         )
 
-        
         self.tf_broadcaster = TransformBroadcaster(self)
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        
         self.get_logger().info("ArUco depth ROS 2 node started.")
         self.get_logger().info(f"RGB topic: {self.color_topic}")
         self.get_logger().info(f"Depth topic: {self.depth_topic}")
         self.get_logger().info(f"Camera info topic: {self.camera_info_topic}")
         self.get_logger().info(f"Marker size: {self.marker_size} m")
         self.get_logger().info(f"Dictionary: {self.aruco_dictionary_name}")
-        self.get_logger().info(f"Target ID: {self.target_id}  (-1 means all markers)")
+        self.get_logger().info(f"Target ID: {self.target_id} (-1 means all markers)")
         self.get_logger().info(f"Arm base frame: {self.arm_base_frame}")
         self.get_logger().info(f"World frame: {self.world_frame}")
         self.get_logger().info(f"Publish TF: {self.publish_tf_enabled}")
         self.get_logger().info(f"Publish RViz markers: {self.publish_rviz_markers_enabled}")
+        self.get_logger().info(f"Show OpenCV window: {self.show_window}")
 
-    
-
-    def get_aruco_dictionary(self, name):
-        dictionaries = {
-            "original": cv2.aruco.DICT_ARUCO_ORIGINAL,
-            "4x4_50": cv2.aruco.DICT_4X4_50,
-            "4x4_100": cv2.aruco.DICT_4X4_100,
-            "4x4_250": cv2.aruco.DICT_4X4_250,
-            "4x4_1000": cv2.aruco.DICT_4X4_1000,
-            "5x5_50": cv2.aruco.DICT_5X5_50,
-            "5x5_100": cv2.aruco.DICT_5X5_100,
-            "5x5_250": cv2.aruco.DICT_5X5_250,
-            "5x5_1000": cv2.aruco.DICT_5X5_1000,
-            "6x6_50": cv2.aruco.DICT_6X6_50,
-            "6x6_100": cv2.aruco.DICT_6X6_100,
-            "6x6_250": cv2.aruco.DICT_6X6_250,
-            "6x6_1000": cv2.aruco.DICT_6X6_1000,
-            "7x7_50": cv2.aruco.DICT_7X7_50,
-            "7x7_100": cv2.aruco.DICT_7X7_100,
-            "7x7_250": cv2.aruco.DICT_7X7_250,
-            "7x7_1000": cv2.aruco.DICT_7X7_1000,
-        }
-
-        if name not in dictionaries:
-            self.get_logger().warn(
-                f"Unknown dictionary '{name}', using original ArUco."
-            )
-            name = "original"
-
-        return cv2.aruco.getPredefinedDictionary(dictionaries[name])
-
-    
     def camera_info_callback(self, msg):
-        print("[CALLBACK] camera_info_callback entered", flush=True)
-        print("[CALLBACK] camera_info frame:", msg.header.frame_id, flush=True)
-        print("[CALLBACK] camera_info K:", list(msg.k), flush=True)
-
-        self.camera_matrix = np.array(msg.k, dtype=np.float32).reshape(3, 3)
+        self.camera_matrix = np.array(msg.k, dtype=np.float64).reshape(3, 3)
 
         if len(msg.d) > 0:
-            self.dist_coeffs = np.array(msg.d, dtype=np.float32)
+            self.dist_coeffs = np.array(msg.d, dtype=np.float64)
         else:
-            self.dist_coeffs = np.zeros((5,), dtype=np.float32)
+            self.dist_coeffs = np.zeros((5,), dtype=np.float64)
 
-    """
     def depth_callback(self, msg):
         try:
             self.latest_depth_image = self.bridge.imgmsg_to_cv2(
@@ -231,77 +340,10 @@ class ArucoDepthNode(Node):
             )
             self.latest_depth_encoding = msg.encoding
 
-        except Exception as e:
-            self.get_logger().error(f"Depth image conversion failed: {e}")
-    """
-
-    def depth_callback(self, msg):
-        print("[CALLBACK] depth_callback entered", flush=True)
-        print("[CALLBACK] depth encoding:", msg.encoding, flush=True)
-        print("[CALLBACK] depth size:", msg.width, "x", msg.height, flush=True)
-
-        try:
-            print("[CALLBACK] before depth imgmsg_to_cv2", flush=True)
-            self.latest_depth_image = self.bridge.imgmsg_to_cv2(
-                msg,
-                desired_encoding="passthrough"
-            )
-            print("[CALLBACK] after depth imgmsg_to_cv2", flush=True)
-
-            self.latest_depth_encoding = msg.encoding
-
-            print(
-                "[CALLBACK] depth image:",
-                self.latest_depth_image.shape,
-                self.latest_depth_image.dtype,
-                flush=True
-            )
-
-        except Exception as e:
-            self.get_logger().error(f"Depth image conversion failed: {e}")
-            print("[CALLBACK] depth conversion exception:", e, flush=True)
-
+        except Exception as exc:
+            self.get_logger().error(f"Depth image conversion failed: {exc}")
 
     def color_callback(self, msg):
-        print("[CALLBACK] color_callback entered", flush=True)
-        print("[CALLBACK] color encoding:", msg.encoding, flush=True)
-        print("[CALLBACK] color size:", msg.width, "x", msg.height, flush=True)
-        print("[CALLBACK] color frame:", msg.header.frame_id, flush=True)
-
-        if self.camera_matrix is None:
-            print("[CALLBACK] waiting for camera_info", flush=True)
-            self.get_logger().warn("Waiting for camera_info...")
-            return
-
-        if self.latest_depth_image is None:
-            print("[CALLBACK] waiting for depth image", flush=True)
-            self.get_logger().warn("Waiting for depth image...")
-            return
-
-        try:
-            print("[CALLBACK] before color imgmsg_to_cv2", flush=True)
-            color_image = self.bridge.imgmsg_to_cv2(
-                msg,
-                desired_encoding="bgr8"
-            )
-            print("[CALLBACK] after color imgmsg_to_cv2", flush=True)
-            print("[CALLBACK] color image:", color_image.shape, color_image.dtype, flush=True)
-
-        except Exception as e:
-            self.get_logger().error(f"RGB image conversion failed: {e}")
-            print("[CALLBACK] RGB conversion exception:", e, flush=True)
-            return
-
-        print("[CALLBACK] before cvtColor", flush=True)
-        gray_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
-        print("[CALLBACK] after cvtColor", flush=True)
-
-        print("[CALLBACK] before detect_markers", flush=True)
-        corners, ids, rejected = self.detect_markers(gray_image)
-        print("[CALLBACK] after detect_markers", flush=True)
-        print("[CALLBACK] ids:", None if ids is None else ids.flatten().tolist(), flush=True)
-
-        """
         if self.camera_matrix is None:
             self.get_logger().warn("Waiting for camera_info...")
             return
@@ -315,51 +357,52 @@ class ArucoDepthNode(Node):
                 msg,
                 desired_encoding="bgr8"
             )
-        except Exception as e:
-            self.get_logger().error(f"RGB image conversion failed: {e}")
+        except Exception as exc:
+            self.get_logger().error(f"RGB image conversion failed: {exc}")
             return
 
         gray_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
 
-        corners, ids, rejected = self.detect_markers(gray_image)
-        """
+        try:
+            corners, ids, rejected = self.aruco_backend.detect_markers(gray_image)
+        except Exception as exc:
+            self.get_logger().error(f"ArUco detection failed: {exc}")
+            return
 
         pose_array_msg = PoseArray()
         pose_array_msg.header = msg.header
+
         pose_array_arm_msg = PoseArray()
         pose_array_arm_msg.header.stamp = msg.header.stamp
         pose_array_arm_msg.header.frame_id = self.arm_base_frame
+
         pose_array_world_msg = PoseArray()
         pose_array_world_msg.header.stamp = msg.header.stamp
         pose_array_world_msg.header.frame_id = self.world_frame
-        marker_ids_msg = Int32MultiArray()
 
+        marker_ids_msg = Int32MultiArray()
         marker_array_msg = MarkerArray()
 
         if ids is not None:
-            cv2.aruco.drawDetectedMarkers(color_image, corners, ids)
+            self.aruco_backend.draw_detected_markers(color_image, corners, ids)
 
-            for i, marker_id in enumerate(ids.flatten()):
+            for i, marker_id_np in enumerate(ids.flatten()):
+                marker_id = int(marker_id_np)
 
-                # If target_id = -1, process all markers.
-                # Otherwise, process only the selected marker ID.
-                if self.target_id != -1 and int(marker_id) != self.target_id:
+                if self.target_id != -1 and marker_id != self.target_id:
                     continue
 
                 marker_corners = corners[i]
 
-                
                 success, rvec, tvec = self.estimate_marker_pose(marker_corners)
-
                 if not success:
+                    self.get_logger().warn(f"solvePnP failed for marker ID {marker_id}")
                     continue
 
                 x, y, z = tvec.flatten()
 
-                
                 center_x, center_y = self.get_marker_center(marker_corners)
 
-                
                 depth_m = self.get_depth_at_pixel(
                     self.latest_depth_image,
                     self.latest_depth_encoding,
@@ -368,8 +411,7 @@ class ArucoDepthNode(Node):
                     window_size=5
                 )
 
-                
-                cv2.drawFrameAxes(
+                self.aruco_backend.draw_axes(
                     color_image,
                     self.camera_matrix,
                     self.dist_coeffs,
@@ -378,21 +420,8 @@ class ArucoDepthNode(Node):
                     self.marker_size / 2.0
                 )
 
-               
                 quat = self.rvec_to_quaternion(rvec)
 
-               
-                if self.publish_tf_enabled:
-                    self.publish_aruco_tf(
-                        msg.header,
-                        int(marker_id),
-                        x,
-                        y,
-                        z,
-                        quat
-                    )
-
-                
                 pose_msg = PoseStamped()
                 pose_msg.header = msg.header
 
@@ -407,27 +436,37 @@ class ArucoDepthNode(Node):
 
                 self.pose_pub.publish(pose_msg)
                 pose_array_msg.poses.append(pose_msg.pose)
-                marker_ids_msg.data.append(int(marker_id))
+                marker_ids_msg.data.append(marker_id)
+
                 arm_pose = self.transform_pose(pose_msg, self.arm_base_frame)
                 if arm_pose is not None:
                     pose_array_arm_msg.poses.append(arm_pose.pose)
+
                 world_pose = self.transform_pose(pose_msg, self.world_frame)
                 if world_pose is not None:
                     pose_array_world_msg.poses.append(world_pose.pose)
 
-                
+                if self.publish_tf_enabled:
+                    self.publish_aruco_tf(
+                        msg.header,
+                        marker_id,
+                        x,
+                        y,
+                        z,
+                        quat
+                    )
+
                 if self.publish_rviz_markers_enabled:
                     rviz_marker = self.create_rviz_marker(
                         msg.header,
-                        int(marker_id),
+                        marker_id,
                         pose_msg.pose
                     )
                     marker_array_msg.markers.append(rviz_marker)
 
-                
                 self.draw_text(
                     color_image,
-                    int(marker_id),
+                    marker_id,
                     center_x,
                     center_y,
                     depth_m,
@@ -439,21 +478,28 @@ class ArucoDepthNode(Node):
                 self.get_logger().info(
                     f"Marker ID: {marker_id} | "
                     f"Depth: {depth_m:.3f} m | "
-                    f"Pose: x={x:.3f}, y={y:.3f}, z={z:.3f} m | "
+                    f"Camera-frame pose: x={x:.3f}, y={y:.3f}, z={z:.3f} m | "
                     f"Frame: {msg.header.frame_id}"
                 )
 
-        
+                if arm_pose is not None:
+                    self.get_logger().info(
+                        f"Marker ID: {marker_id} | "
+                        f"Arm-frame pose: "
+                        f"x={arm_pose.pose.position.x:.3f}, "
+                        f"y={arm_pose.pose.position.y:.3f}, "
+                        f"z={arm_pose.pose.position.z:.3f} m | "
+                        f"Frame: {arm_pose.header.frame_id}"
+                    )
+
         self.pose_array_pub.publish(pose_array_msg)
         self.pose_array_arm_pub.publish(pose_array_arm_msg)
         self.pose_array_world_pub.publish(pose_array_world_msg)
         self.marker_ids_pub.publish(marker_ids_msg)
 
-        
         if self.publish_rviz_markers_enabled:
             self.marker_array_pub.publish(marker_array_msg)
 
-        
         try:
             debug_msg = self.bridge.cv2_to_imgmsg(
                 color_image,
@@ -462,44 +508,31 @@ class ArucoDepthNode(Node):
             debug_msg.header = msg.header
             self.debug_image_pub.publish(debug_msg)
 
-        except Exception as e:
-            self.get_logger().error(f"Debug image publish failed: {e}")
+        except Exception as exc:
+            self.get_logger().error(f"Debug image publish failed: {exc}")
 
-        
         if self.show_window:
+            # Keep this false on Linux if your OpenCV GUI backend is unstable.
             cv2.imshow("ROS 2 ArUco Depth Detection", color_image)
             cv2.waitKey(1)
 
-    """
-    def detect_markers(self, gray_image):
-        if self.detector is not None:
-            corners, ids, rejected = self.detector.detectMarkers(gray_image)
-        else:
-            corners, ids, rejected = cv2.aruco.detectMarkers(
-                gray_image,
-                self.aruco_dict,
-                parameters=self.aruco_params
-            )
-
-        return corners, ids, rejected
-
     def estimate_marker_pose(self, marker_corners):
         half_size = self.marker_size / 2.0
 
-        
         object_points = np.array([
             [-half_size,  half_size, 0.0],
             [ half_size,  half_size, 0.0],
             [ half_size, -half_size, 0.0],
             [-half_size, -half_size, 0.0]
-        ], dtype=np.float32)
+        ], dtype=np.float64)
 
-        image_points = marker_corners.reshape((4, 2)).astype(np.float32)
+        image_points = marker_corners.reshape((4, 2)).astype(np.float64)
 
-        if hasattr(cv2, "SOLVEPNP_IPPE_SQUARE"):
-            solvepnp_flag = cv2.SOLVEPNP_IPPE_SQUARE
-        else:
-            solvepnp_flag = cv2.SOLVEPNP_ITERATIVE
+        solvepnp_flag = (
+            cv2.SOLVEPNP_IPPE_SQUARE
+            if hasattr(cv2, "SOLVEPNP_IPPE_SQUARE")
+            else cv2.SOLVEPNP_ITERATIVE
+        )
 
         success, rvec, tvec = cv2.solvePnP(
             object_points,
@@ -508,65 +541,6 @@ class ArucoDepthNode(Node):
             self.dist_coeffs,
             flags=solvepnp_flag
         )
-
-        return success, rvec, tvec
-    """
-
-    def detect_markers(self, gray_image):
-        print("[ARUCO] detect_markers entered", flush=True)
-        print("[ARUCO] gray image:", gray_image.shape, gray_image.dtype, flush=True)
-        print("[ARUCO] detector is None:", self.detector is None, flush=True)
-
-        if self.detector is not None:
-            print("[ARUCO] before self.detector.detectMarkers", flush=True)
-            corners, ids, rejected = self.detector.detectMarkers(gray_image)
-            print("[ARUCO] after self.detector.detectMarkers", flush=True)
-        else:
-            print("[ARUCO] before cv2.aruco.detectMarkers legacy", flush=True)
-            corners, ids, rejected = cv2.aruco.detectMarkers(
-                gray_image,
-                self.aruco_dict,
-                parameters=self.aruco_params
-            )
-            print("[ARUCO] after cv2.aruco.detectMarkers legacy", flush=True)
-
-        return corners, ids, rejected
-
-    def estimate_marker_pose(self, marker_corners):
-        print("[PNP] estimate_marker_pose entered", flush=True)
-
-        half_size = self.marker_size / 2.0
-
-        object_points = np.array([
-            [-half_size,  half_size, 0.0],
-            [ half_size,  half_size, 0.0],
-            [ half_size, -half_size, 0.0],
-            [-half_size, -half_size, 0.0]
-        ], dtype=np.float32)
-
-        image_points = marker_corners.reshape((4, 2)).astype(np.float32)
-
-        print("[PNP] object_points:", object_points.tolist(), flush=True)
-        print("[PNP] image_points:", image_points.tolist(), flush=True)
-        print("[PNP] camera_matrix:", self.camera_matrix.tolist(), flush=True)
-        print("[PNP] dist_coeffs:", self.dist_coeffs.tolist(), flush=True)
-
-        if hasattr(cv2, "SOLVEPNP_IPPE_SQUARE"):
-            solvepnp_flag = cv2.SOLVEPNP_IPPE_SQUARE
-            print("[PNP] using SOLVEPNP_IPPE_SQUARE", flush=True)
-        else:
-            solvepnp_flag = cv2.SOLVEPNP_ITERATIVE
-            print("[PNP] using SOLVEPNP_ITERATIVE", flush=True)
-
-        print("[PNP] before cv2.solvePnP", flush=True)
-        success, rvec, tvec = cv2.solvePnP(
-            object_points,
-            image_points,
-            self.camera_matrix,
-            self.dist_coeffs,
-            flags=solvepnp_flag
-        )
-        print("[PNP] after cv2.solvePnP", flush=True)
 
         return success, rvec, tvec
 
@@ -579,6 +553,9 @@ class ArucoDepthNode(Node):
         return center_x, center_y
 
     def get_depth_at_pixel(self, depth_image, encoding, center_x, center_y, window_size=5):
+        if depth_image is None:
+            return 0.0
+
         h, w = depth_image.shape[:2]
 
         half_window = window_size // 2
@@ -592,7 +569,7 @@ class ArucoDepthNode(Node):
 
                 d = depth_image[y, x]
 
-                if np.isnan(d) or d <= 0:
+                if not np.isfinite(float(d)) or float(d) <= 0.0:
                     continue
 
                 depth_values.append(float(d))
@@ -609,8 +586,6 @@ class ArucoDepthNode(Node):
             return median_depth * 0.001
 
         return median_depth
-
-    
 
     def rvec_to_quaternion(self, rvec):
         rotation_matrix, _ = cv2.Rodrigues(rvec)
@@ -646,16 +621,20 @@ class ArucoDepthNode(Node):
             qy = (R[1, 2] + R[2, 1]) / s
             qz = 0.25 * s
 
-        return np.array([qx, qy, qz, qw], dtype=np.float64)
+        quat = np.array([qx, qy, qz, qw], dtype=np.float64)
 
+        norm = np.linalg.norm(quat)
+        if norm > 0.0:
+            quat = quat / norm
 
-    # TF helper
+        return quat
+
     def transform_pose(self, pose_msg, target_frame):
         try:
             transform = self.tf_buffer.lookup_transform(
-                target_frame,                 # where you want the pose
-                pose_msg.header.frame_id,      # where the pose currently is
-                rclpy.time.Time(),             # latest available transform
+                target_frame,
+                pose_msg.header.frame_id,
+                rclpy.time.Time(),
                 timeout=Duration(seconds=0.2)
             )
 
@@ -665,20 +644,18 @@ class ArucoDepthNode(Node):
 
             return transformed
 
-        except TransformException as ex:
+        except TransformException as exc:
             self.get_logger().warn(
                 f"Could not transform from '{pose_msg.header.frame_id}' "
-                f"to '{target_frame}': {ex}"
+                f"to '{target_frame}': {exc}"
             )
             return None
-
 
     def publish_aruco_tf(self, header, marker_id, x, y, z, quat):
         transform = TransformStamped()
 
         transform.header.stamp = header.stamp
         transform.header.frame_id = header.frame_id
-
         transform.child_frame_id = f"aruco_marker_{marker_id}"
 
         transform.transform.translation.x = float(x)
@@ -691,10 +668,6 @@ class ArucoDepthNode(Node):
         transform.transform.rotation.w = float(quat[3])
 
         self.tf_broadcaster.sendTransform(transform)
-
-
-
-
 
     def draw_text(self, image, marker_id, center_x, center_y, depth_m, x, y, z):
         cv2.circle(
@@ -735,7 +708,6 @@ class ArucoDepthNode(Node):
             2
         )
 
-
     def create_rviz_marker(self, header, marker_id, pose):
         marker = Marker()
 
@@ -748,12 +720,10 @@ class ArucoDepthNode(Node):
 
         marker.pose = pose
 
-        
         marker.scale.x = float(self.marker_size)
         marker.scale.y = float(self.marker_size)
         marker.scale.z = 0.005
 
-        
         marker.color.r = 0.0
         marker.color.g = 1.0
         marker.color.b = 0.0
@@ -764,61 +734,34 @@ class ArucoDepthNode(Node):
 
         return marker
 
-"""
+
 def main(args=None):
     rclpy.init(args=args)
-
-    node = ArucoDepthNode()
+    node = None
 
     try:
+        node = ArucoDepthNode()
         rclpy.spin(node)
 
     except KeyboardInterrupt:
         pass
 
     finally:
-        node.destroy_node()
-        cv2.destroyAllWindows()
-        rclpy.shutdown()
-"""
+        show_window = False
 
-def main(args=None):
-    print("[MAIN] Before rclpy.init()", flush=True)
-    rclpy.init(args=args)
-    print("[MAIN] After rclpy.init()", flush=True)
-
-    print("[MAIN] Before ArucoDepthNode()", flush=True)
-    node = ArucoDepthNode()
-    print("[MAIN] After ArucoDepthNode()", flush=True)
-
-    try:
-        print("[MAIN] Before rclpy.spin()", flush=True)
-        rclpy.spin(node)
-        print("[MAIN] After rclpy.spin()", flush=True)
-
-    except KeyboardInterrupt:
-        print("[MAIN] KeyboardInterrupt", flush=True)
-
-    finally:
-        print("[MAIN] Cleanup started", flush=True)
-
-        try:
+        if node is not None:
+            show_window = bool(getattr(node, "show_window", False))
             node.destroy_node()
-            print("[MAIN] node.destroy_node() done", flush=True)
-        except Exception as e:
-            print("[MAIN] node.destroy_node() failed:", e, flush=True)
 
-        try:
-            cv2.destroyAllWindows()
-            print("[MAIN] cv2.destroyAllWindows() done", flush=True)
-        except Exception as e:
-            print("[MAIN] cv2.destroyAllWindows() failed:", e, flush=True)
+        # Safer on Linux: only call this if you actually created OpenCV windows.
+        if show_window:
+            try:
+                cv2.destroyAllWindows()
+            except Exception:
+                pass
 
-        try:
+        if rclpy.ok():
             rclpy.shutdown()
-            print("[MAIN] rclpy.shutdown() done", flush=True)
-        except Exception as e:
-            print("[MAIN] rclpy.shutdown() failed:", e, flush=True)
 
 
 if __name__ == "__main__":
