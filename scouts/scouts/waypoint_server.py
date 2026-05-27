@@ -41,10 +41,12 @@ class WaypointServer(Node):
         self.robot = [None, None, None] # x, y, theta
 
 
-
+        self.goal_list = [(0.2, 1.5),
+                          (0.4, 1.5),
+                          (0.4, 0.75)]
         self.goal_pose = [2.0, 2.0]
 
-        
+
 
         self.control_timer = self.create_timer(
             0.1,
@@ -57,40 +59,42 @@ class WaypointServer(Node):
         if None in self.robot:
             return
     
-        self.get_logger().info(f'robot: [{self.robot[0]}, {self.robot[1]}, {self.robot[2]}')
-        dx = self.goal_pose[0] - self.robot[0]
-        dy = self.goal_pose[1] - self.robot[1]
-    
-        distance = np.hypot(dx, dy)
-        self.get_logger().info(f'distance: {distance}')
-    
-        desired_heading = np.arctan2(dy, dx)
-        self.get_logger().info(f'desired_heading: {desired_heading}')
+        for goal in self.goal_list:
 
-        heading_error = desired_heading - self.robot[2]
-    
-        heading_error = np.arctan2(
-            np.sin(heading_error),
-            np.cos(heading_error)
-        )
-    
-        msg = Twist()
-    
-        msg.linear.x = min(0.3, distance)
-        msg.angular.z = heading_error
-    
-        self.cmd_pub.publish(msg)
-        self.get_logger().info('---------------------')
+            while distance < 0.05:
 
-        if distance < 0.1:
+                self.get_logger().info(f'robot: [{self.robot[0]}, {self.robot[1]}, {self.robot[2]}')
+                dx = self.goal_pose[0] - self.robot[0]
+                dy = self.goal_pose[1] - self.robot[1]
+            
+                distance = np.hypot(dx, dy)
+                self.get_logger().info(f'distance: {distance}')
+            
+                desired_heading = np.arctan2(dy, dx)
+                self.get_logger().info(f'desired_heading: {desired_heading}')
+
+                heading_error = desired_heading - self.robot[2]
+            
+                heading_error = np.arctan2(
+                    np.sin(heading_error),
+                    np.cos(heading_error)
+                )
+            
+                msg = Twist()
+            
+                msg.linear.x = min(0.3, distance)
+                msg.angular.z = heading_error
+            
+                self.cmd_pub.publish(msg)
+                self.get_logger().info('---------------------')
+
             msg = Twist()  # all zeros
             self.cmd_pub.publish(msg)
-    
-            self.control_timer.cancel()
             
-            self.get_logger().info(f'Goal {self.goal_pose} reached!')
+            # self.control_timer.cancel()
             
-            return
+            self.get_logger().info(f'Goal {goal} reached!')
+            
 
 
 
