@@ -9,12 +9,13 @@ from rclpy.action import ActionServer, ActionClient
 
 from geometry_msgs.msg import PoseStamped
 
-from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
+from nav2_simple_commander.robot_navigator import BasicNavigator
+from nav2_msgs.action import NavigateToPose
+from action_msgs.msg import GoalStatus
 
 from manipulator_interface.action import TransportBlock
 from manipulator_interface.action import AbsoluteMove
 from control_msgs.action import GripperCommand
-import time
 
 class State(Enum):
 
@@ -39,7 +40,7 @@ class Manipulator:
 
         self.absolute_move_client = ActionClient(node, AbsoluteMove,'absolute_move')
 
-        self.gripper_client = ActionClient(node,GripperCommand,f'/{self.namespace}/arm_0_gripper_controller/gripper_cmd')
+        self.gripper_client = ActionClient(node,GripperCommand,f'/{self.namespace}/manipulatorsEver/arm_0_gripper_controller/gripper_cmd')
 
         node.get_logger().info('Waiting for manipulation action servers...')
 
@@ -144,6 +145,9 @@ class RobotFSM(Node):
         self.get_logger().info('Waiting for Nav2...')
         self.navigator.waitUntilNav2Active(localizer="bt_navigator")
 
+        self.nav_to_pose_client = ActionClient(self, NavigateToPose, f'/{self.namespace}/navigate_to_pose')
+        self.nav_to_pose_client.wait_for_server()
+
         self.manipulator = Manipulator(self)
         self.manipulator.namespace = self.manipulator_namespace
         self.state = State.IDLE
@@ -232,20 +236,19 @@ class RobotFSM(Node):
     async def navigate_to_pose(self, pose):
 
         self.get_logger().info(f'Navigating to: 'f'({pose.pose.position.x}, 'f'{pose.pose.position.y})')
-        self.navigator.goToPose(pose)
 
-        while not self.navigator.isTaskComplete():
-            feedback = self.navigator.getFeedback()
+        goal_msg = NavigateToPose.Goal()
+        goal_msg.pose = pose
 
-            if feedback:
-                self.get_logger().info('Robot navigating...')
+        goal_handle = await self.nav_to_pose_client.send_goal_async(goal_msg)
 
-            # await asyncio.sleep(0.5)
-            time.sleep(0.5)
+        if not goal_handle.accepted:
+            self.get_logger().error('Navigation goal rejected')
+            return False
 
-        result = self.navigator.getResult()
+        result = await goal_handle.get_result_async()
 
-        if result == TaskResult.SUCCEEDED:
+        if result.status == GoalStatus.STATUS_SUCCEEDED:
             self.get_logger().info('Navigation succeeded')
             return True
 
