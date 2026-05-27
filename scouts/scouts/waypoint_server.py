@@ -75,7 +75,7 @@ class WaypointServer(Node):
         msg.linear.x = min(0.3, distance)
         msg.angular.z = heading_error
     
-        # self.cmd_pub.publish(msg)
+        self.cmd_pub.publish(msg)
         self.get_logger().info('---------------------')
 
         if distance < 0.1:
