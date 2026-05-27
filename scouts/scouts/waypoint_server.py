@@ -73,8 +73,16 @@ class WaypointServer(Node):
         msg.angular.z = heading_error
     
         self.cmd_pub.publish(msg)
-        
-        self.get_logger().info(f'Goal {self.goal_pose} reached!')
+
+        if distance < 0.1:
+            msg = Twist()  # all zeros
+            self.cmd_pub.publish(msg)
+    
+            self.control_timer.cancel()
+            
+            self.get_logger().info(f'Goal {self.goal_pose} reached!')
+            
+            return
 
 
 
