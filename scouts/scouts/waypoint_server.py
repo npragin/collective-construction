@@ -14,6 +14,7 @@ from tf_transformations import euler_from_quaternion
 import numpy as np
 
 from geometry_msgs.msg import Twist
+from rclpy.executors import MultiThreadedExecutor
 
 class WaypointServer(Node):
 
@@ -53,62 +54,6 @@ class WaypointServer(Node):
             0.1,
             self.control_loop
         )
-
-    # def control_loop(self):
-    
-    #     if None in self.robot:
-    #         return
-    
-    #     distance = float('inf')
-    #     heading_error = float('inf')
-
-    #     for goal in self.goal_list:
-
-    #         self.goal_pose = goal
-
-    #         self.get_logger().info(f'goal: {goal}')
-
-    #         while heading_error > 0.1:
-
-    #             self.get_logger().info(f'robot: [{self.robot[0]}, {self.robot[1]}, {self.robot[2]}')
-    #             dx = self.goal_pose[0] - self.robot[0]
-    #             dy = self.goal_pose[1] - self.robot[1]
-
-    #             desired_heading = np.arctan2(dy, dx)
-    #             self.get_logger().info(f'desired_heading: {desired_heading}')
-    #             heading_error = desired_heading - self.robot[2]
-    #             heading_error = np.arctan2(
-    #                 np.sin(heading_error),
-    #                 np.cos(heading_error)
-    #             )
-
-    #             msg = Twist()
-            
-    #             msg.angular.z = heading_error * 0.1
-
-
-    #         while distance > 0.05:
-            
-    #             distance = np.hypot(dx, dy)
-    #             self.get_logger().info(f'distance: {distance}')
-            
-
-
-            
-    #             msg = Twist()
-            
-    #             msg.linear.x = min(0.3, distance)
-    #             msg.angular.z = heading_error * 0.1
-            
-    #             self.cmd_pub.publish(msg)
-    #             self.get_logger().info('---------------------')
-
-    #         msg = Twist()  # all zeros
-    #         self.cmd_pub.publish(msg)
-
-    #         # self.control_timer.cancel()
-            
-    #         self.get_logger().info(f'Goal {goal} reached!')
             
 
 
@@ -122,7 +67,6 @@ class WaypointServer(Node):
         for goal in self.goal_list:
 
             self.goal_pose = goal
-
 
             while distance > 0.05:
                 self.get_logger().info(f'goal: {goal}')
@@ -199,8 +143,11 @@ def main():
 
     node = WaypointServer()
 
-    rclpy.spin(node)
+    executer = MultiThreadedExecutor(num_threads=4)
+    executer.add_node(node)
+    executer.spin(node)
 
+    node.destroy_node()
     rclpy.shutdown()
 
 
