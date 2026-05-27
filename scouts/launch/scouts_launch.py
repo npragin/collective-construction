@@ -89,6 +89,14 @@ def generate_launch_description():
             }.items(),
         ),
 
+        Node(
+            package='scouts',
+            executable='check_tags',
+            name='check_tags',
+            namespace=namespace,
+            output='screen'
+        )
+
         # Node(
         #     package="scouts",
         #     executable="waypoint_server",

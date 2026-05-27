@@ -32,6 +32,7 @@ setup(
             'robot_tf = scouts.robot_tf:main',
             'map2odom_tf = scouts.map2odom_tf:main',
             'waypoint_server = scouts.waypoint_server:main',
+            'check_tags = scouts.check_tags:main',
         ],
     },
 )

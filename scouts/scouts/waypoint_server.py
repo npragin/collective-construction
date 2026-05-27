@@ -57,6 +57,8 @@ class WaypointServer(Node):
             self.control_loop
         )
 
+        
+
     def control_loop(self):
     
         if None in self.robot:
