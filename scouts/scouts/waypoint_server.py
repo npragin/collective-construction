@@ -50,10 +50,10 @@ class WaypointServer(Node):
 
 
 
-        self.control_timer = self.create_timer(
-            0.1,
-            self.control_loop
-        )
+        # self.control_timer = self.create_timer(
+        #     0.1,
+        #     self.control_loop
+        # )
             
 
 
