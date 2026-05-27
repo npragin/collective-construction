@@ -76,6 +76,7 @@ class WaypointServer(Node):
         msg.angular.z = heading_error
     
         # self.cmd_pub.publish(msg)
+        self.get_logger().info('---------------------')
 
         if distance < 0.1:
             msg = Twist()  # all zeros
