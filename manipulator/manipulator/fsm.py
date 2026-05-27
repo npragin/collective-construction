@@ -40,7 +40,7 @@ class Manipulator:
 
         self.absolute_move_client = ActionClient(node, AbsoluteMove,'absolute_move')
 
-        self.gripper_client = ActionClient(node,GripperCommand,f'/{self.namespace}/manipulatorsEver/arm_0_gripper_controller/gripper_cmd')
+        self.gripper_client = ActionClient(node,GripperCommand,f'/{self.namespace}/manipulators/arm_0_gripper_controller/gripper_cmd')
 
         node.get_logger().info('Waiting for manipulation action servers...')
 
