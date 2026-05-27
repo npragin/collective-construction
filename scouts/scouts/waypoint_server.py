@@ -53,7 +53,7 @@ class WaypointServer(Node):
         if None in self.robot:
             return
     
-        self.get_logger().info(f'robot: [{robot[0]}, {robot[1]}, {robot[2]}')
+        self.get_logger().info(f'robot: [{self.robot[0]}, {self.robot[1]}, {self.robot[2]}')
         dx = self.goal_pose[0] - self.robot[0]
         dy = self.goal_pose[1] - self.robot[1]
     
