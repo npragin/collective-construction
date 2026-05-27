@@ -5,7 +5,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
 
-
+# april tage 25H9 tags are being used by retrievers
 class CheckTags(Node):
     def __init__(self):
         super().__init__("check_tags")
