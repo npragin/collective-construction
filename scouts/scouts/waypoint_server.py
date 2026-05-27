@@ -62,7 +62,7 @@ class WaypointServer(Node):
     
         heading_error = desired_heading - self.robot[2]
     
-        heading_error = np.atan2(
+        heading_error = np.arctan2(
             np.sin(heading_error),
             np.cos(heading_error)
         )
