@@ -40,7 +40,7 @@ class WaypointServer(Node):
 
         self.robot = [None, None, None] # x, y, theta
 
-        self.goal_pose = [5.0, 5.0]
+        self.goal_pose = [2.0, 2.0]
 
         self.control_timer = self.create_timer(
             0.1,
@@ -53,13 +53,16 @@ class WaypointServer(Node):
         if None in self.robot:
             return
     
+        self.get_logger().info(f'robot: [{robot[0]}, {robot[1]}, {robot[2]}')
         dx = self.goal_pose[0] - self.robot[0]
         dy = self.goal_pose[1] - self.robot[1]
     
         distance = np.hypot(dx, dy)
+        self.get_logger().info(f'distance: {distance}')
     
         desired_heading = np.arctan2(dy, dx)
-    
+        self.get_logger().info(f'desired_heading: {desired_heading}')
+
         heading_error = desired_heading - self.robot[2]
     
         heading_error = np.arctan2(
@@ -72,7 +75,7 @@ class WaypointServer(Node):
         msg.linear.x = min(0.3, distance)
         msg.angular.z = heading_error
     
-        self.cmd_pub.publish(msg)
+        # self.cmd_pub.publish(msg)
 
         if distance < 0.1:
             msg = Twist()  # all zeros
