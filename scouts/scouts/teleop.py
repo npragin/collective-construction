@@ -7,7 +7,7 @@
 """
 
 
-import rospy
+import rclpy
 from geometry_msgs.msg import Twist
 import time
 
@@ -59,12 +59,12 @@ class _GetchWindows:
 
 if __name__ == '__main__':
 
-    rospy.init_node('bcr_teleop_node')
-    vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=1)
-    rospy.Timer(rospy.Duration(0.05), publish_event)
+    rclpy.init_node('bcr_teleop_node')
+    vel_pub = rclpy.Publisher('/cmd_vel', Twist, queue_size=1)
+    rclpy.Timer(rclpy.Duration(0.05), publish_event)
     cmd_vel_msg = Twist()
     getch = _Getch()
-    rospy.loginfo("\n\tw: increment linear velocity by 0.1,\n\
+    rclpy.loginfo("\n\tw: increment linear velocity by 0.1,\n\
         s: decrement linear velocity by 0.1,\n\
         a: increment angular velocity by 0.1,\n\
         d: decrement angular velocity by 0.1,\n\
@@ -72,7 +72,7 @@ if __name__ == '__main__':
         q: QUIT")
 
     try:
-        while (not rospy.is_shutdown()):
+        while (not rclpy.is_shutdown()):
             key_in = getch()
             if key_in == "w":
                 cmd_vel_msg.linear.x += 0.1
@@ -87,7 +87,7 @@ if __name__ == '__main__':
                 cmd_vel_msg.angular.z = 0
                 if (key_in == "q"):
                     break
-            rospy.loginfo("linear: %f, angular: %f"
+            rclpy.loginfo("linear: %f, angular: %f"
                           % (cmd_vel_msg.linear.x, cmd_vel_msg.angular.z))
-    except rospy.ROSInterruptException:
+    except rclpy.ROSInterruptException:
         pass

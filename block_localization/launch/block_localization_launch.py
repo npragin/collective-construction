@@ -15,7 +15,10 @@ def generate_launch_description():
         "launch", "rs_launch.py",
     )
     return LaunchDescription([
+
         DeclareLaunchArgument("namespace", default_value="sierra"),
+        
+        # realsense
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(rs_launch),
             launch_arguments={
@@ -27,6 +30,8 @@ def generate_launch_description():
                 "initial_reset":              "true",
             }.items(),
         ),
+
+        # block localization node
         Node(
             package="block_localization",
             executable="block_localization",
