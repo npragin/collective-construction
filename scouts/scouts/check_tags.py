@@ -15,7 +15,8 @@ class CheckTags(Node):
         self.create_subscription(
             Image,
             "/sierra/camera/color/image_raw",
-            self.image_callback,)
+            self.image_callback,
+            10)
 
     def image_callback(self, msg):
         try:
