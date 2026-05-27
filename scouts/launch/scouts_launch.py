@@ -53,13 +53,13 @@ def generate_launch_description():
         ),
 
         # odom -> base_link TF broadcaster
-        Node(
-            package="scouts",
-            executable="odom2base_tf",
-            name="odom2base_tf",
-            namespace=namespace,
-            output="screen",
-        ),
+        # Node(
+        #     package="scouts",
+        #     executable="odom2base_tf",
+        #     name="odom2base_tf",
+        #     namespace=namespace,
+        #     output="screen",
+        # ),
 
         # Pioneer driver
         Node(

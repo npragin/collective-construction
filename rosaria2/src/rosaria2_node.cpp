@@ -61,6 +61,9 @@ RosAria2Node::Parameters::Parameters(rclcpp::Node* node) :
 
 RosAria2Node::RosAria2Node(const std::string& name) :
     rclcpp::Node(name),
+    frame_id_odom('odom')
+    frame_id_base_link('base_link')
+    
     // runtime configuration handler
     config(std::make_shared< RosAria2Node::Parameters >(this)),
     // control timeout (max delay between vel commands)
@@ -303,6 +306,7 @@ void RosAria2Node::publish() {
 
     // -----------------------------------------------------
     // publish base transform (odom->base_link)
+    // here
     odom_trans.header.stamp = this->now();
     odom_trans.header.frame_id = frame_id_odom;
     odom_trans.child_frame_id = frame_id_base_link;
