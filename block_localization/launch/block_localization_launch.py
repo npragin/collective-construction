@@ -18,18 +18,18 @@ def generate_launch_description():
 
         DeclareLaunchArgument("namespace", default_value="sierra"),
         
-#         # realsense
-        # IncludeLaunchDescription(
-        #     PythonLaunchDescriptionSource(rs_launch),
-        #     launch_arguments={
-        #         "camera_namespace":           ns,
-        #         "rgb_camera.color_profile":   "1280x720x30",
-        #         "depth_module.depth_profile": "1280x720x30",
-        #         "enable_sync":                "true",
-        #         "align_depth.enable":         "true",
-        #         "initial_reset":              "true",
-        #     }.items(),
-        # ),
+        # realsense
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(rs_launch),
+            launch_arguments={
+                "camera_namespace":           ns,
+                "rgb_camera.color_profile":   "1280x720x30",
+                "depth_module.depth_profile": "1280x720x30",
+                "enable_sync":                "true",
+                "align_depth.enable":         "true",
+                "initial_reset":              "true",
+            }.items(),
+        ),
 
         # block localization node
         Node(
