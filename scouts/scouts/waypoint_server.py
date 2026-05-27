@@ -58,7 +58,7 @@ class WaypointServer(Node):
     
         distance = np.hypot(dx, dy)
     
-        desired_heading = np.atan2(dy, dx)
+        desired_heading = np.arctan2(dy, dx)
     
         heading_error = desired_heading - self.robot[2]
     
