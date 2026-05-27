@@ -74,8 +74,8 @@ def generate_launch_description():
             parameters=[
                 {
                     "port": "/dev/ttyUSB0",
-                    "frame_id": "base_link",
-                    "odom_frame_id": "odom",
+                    "frame_id": "sierra/base_link",
+                    "odom_frame_id": "sierra/odom",
                     "tf_prefix": "rename_when_launching",
                 }
             ],
