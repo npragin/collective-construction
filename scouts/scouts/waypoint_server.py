@@ -65,7 +65,7 @@ class WaypointServer(Node):
             self.goal_pose = goal
 
             while distance > 0.05:
-
+                self.get_logger().info(f'goal: {goal}')
                 self.get_logger().info(f'robot: [{self.robot[0]}, {self.robot[1]}, {self.robot[2]}')
                 dx = self.goal_pose[0] - self.robot[0]
                 dy = self.goal_pose[1] - self.robot[1]
