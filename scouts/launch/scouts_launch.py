@@ -77,17 +77,17 @@ def generate_launch_description():
             ],
         ),
 
-        # # RealSense camera
-        # IncludeLaunchDescription(
-        #     PythonLaunchDescriptionSource(realsense_launch),
-        #     launch_arguments={
-        #         "initial_reset": "true",
-        #         "camera_namespace": namespace,
-        #         "depth_module.depth_profile": "1280x720x30",
-        #         "rgb_camera.color_profile": "1280x720x30",
-        #         "enable_sync": "true",
-        #     }.items(),
-        # ),
+        # RealSense camera
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(realsense_launch),
+            launch_arguments={
+                "initial_reset": "true",
+                "camera_namespace": namespace,
+                "depth_module.depth_profile": "1280x720x30",
+                "rgb_camera.color_profile": "1280x720x30",
+                "enable_sync": "true",
+            }.items(),
+        ),
 
         # Node(
         #     package='scouts',
@@ -97,12 +97,12 @@ def generate_launch_description():
         #     output='screen'
         # )
 
-        # Node(
-        #     package="scouts",
-        #     executable="waypoint_server",
-        #     name="waypoint_server",
-        #     namespace=namespace,
-        #     output="screen",
-        # ),
+        Node(
+            package="scouts",
+            executable="waypoint_server",
+            name="waypoint_server",
+            namespace=namespace,
+            output="screen",
+        ),
 
     ])
