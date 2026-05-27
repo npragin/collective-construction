@@ -33,7 +33,7 @@ class WaypointServer(Node):
 
         try:
             transform = self.tf_buffer.lookup_transform(
-                'sierra/map',        # target frame
+                'map',        # target frame
                 'sierra/base_link',  # source frame
                 rclpy.time.Time()
             )
