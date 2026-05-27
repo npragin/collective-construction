@@ -214,7 +214,7 @@ class AbsoluteMoveNode(Node):
         # self.switch_controller(servo=False)
 
         response = AbsoluteMove.Result()
-        for i in range(2):
+        for _ in range(2):
             #setup moveit goal
             self.reference_frame = goal_handle.request.pose.header.frame_id
             self.target_frame = goal_handle.request.target_frame
@@ -369,10 +369,10 @@ class AbsoluteMoveNode(Node):
         self.get_logger().info(f"Using planner: {planner}")
         if planner == "ompl":
             motion_request.planner_id = "RRTConnectkConfigDefault"
-            motion_request._pipeline_id = "_ompl"
+            motion_request.pipeline_id = "ompl"
         else:
             motion_request.planner_id = pilz_planner
-            motion_request._pipeline_id = "pilz_industrial_motion_planner"
+            motion_request.pipeline_id = "pilz_industrial_motion_planner"
 
         # Set start state to the current state
         self.get_logger().info(f"latest joint state: {self.latest_joint_state.position}")
