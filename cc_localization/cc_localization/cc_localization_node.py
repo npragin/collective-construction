@@ -11,9 +11,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 from ament_index_python.packages import get_package_share_directory
+from cc_interfaces.msg import Stockpiles
 
 import rclpy
-from geometry_msgs.msg import Point, TransformStamped
+from geometry_msgs.msg import Point, Point32, Polygon, TransformStamped
 from nav_msgs.msg import OccupancyGrid
 from rclpy.node import Node
 from tf2_ros import TransformBroadcaster
@@ -146,9 +147,12 @@ class CcLocalizationNode(Node):
         if not self.cap.isOpened():
             raise RuntimeError(f"Failed to open video device {device_id}")
 
+        self.sorted_stockpile_ids = tuple(sorted(STOCKPILE_TAG_IDS))
+
         self.broadcaster = TransformBroadcaster(self)
         self.marker_pub = self.create_publisher(MarkerArray, "workspace_markers", 1)
         self.koz_pub = self.create_publisher(OccupancyGrid, "koz_mask", 1)
+        self.stockpile_pub = self.create_publisher(Stockpiles, "stockpile_polygons", 1)
         self.timer = self.create_timer(1.0 / tick_rate_hz, self.tick)
 
     def destroy_node(self) -> None:
@@ -242,6 +246,28 @@ class CcLocalizationNode(Node):
         grid.data = mask.flatten().astype(np.int8).tolist()
         return grid
 
+    def publish_stockpiles(self, stockpile_rects: dict[int, np.ndarray]) -> None:
+        """
+        Publish stockpiles with parallel ids and polygons arrays.
+
+        Emit polygons for stockpiles detected this tick, in sorted tag-id order.
+        ids[i] is the aruco tag id whose footprint is polygons[i].
+        """
+        if not stockpile_rects:
+            return
+        msg = Stockpiles()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = self.world_frame
+        for tid in self.sorted_stockpile_ids:
+            rect = stockpile_rects.get(tid)
+            if rect is None:
+                continue
+            poly = Polygon()
+            poly.points = [Point32(x=float(x), y=float(y), z=0.0) for x, y in rect]
+            msg.ids.append(tid)
+            msg.polygons.append(poly)
+        self.stockpile_pub.publish(msg)
+
     def tick(self) -> None:
         """Read a frame, solve PnP for both frames, and broadcast available transforms."""
         ret, frame = self.cap.read()
@@ -259,6 +285,7 @@ class CcLocalizationNode(Node):
         transforms = []
         rects: list[np.ndarray] = []
         stockpile_ids: list[int] = []
+        stockpile_rects: dict[int, np.ndarray] = {}
 
         if not outer_ok:
             return
@@ -301,13 +328,16 @@ class CcLocalizationNode(Node):
                 # Shift origin from tag center to rectangle bottom-left.
                 t_wt = t_wt - R_wt @ np.array([sl / 2.0, sw / 2.0, 0.0])
                 transforms.append(self.make_transform(self.world_frame, f"stockpile_{tid}", R_wt, t_wt))
-                rects.append(rect_in_world(R_wt[:2, :2], t_wt[:2], sl, sw))
+                stockpile_rect = rect_in_world(R_wt[:2, :2], t_wt[:2], sl, sw)
+                rects.append(stockpile_rect)
                 stockpile_ids.append(tid)
+                stockpile_rects[tid] = stockpile_rect
             else:
                 transforms.append(self.make_transform(self.world_frame, f"aruco_{tid}", R_wt, t_wt))
 
         self.broadcaster.sendTransform(transforms)
         self.koz_pub.publish(self.build_koz_grid(rects))
+        self.publish_stockpiles(stockpile_rects)
 
         markers = MarkerArray()
         markers.markers.append(self.make_rect_marker(self.world_frame, 0, *self.outer_dims, (0.1, 0.9, 0.1)))

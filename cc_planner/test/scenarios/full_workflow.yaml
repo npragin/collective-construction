@@ -1,0 +1,16 @@
+# Exercises every harness event type in one planner run.
+events:
+  - set_robot_pose: {robot: retriever_1, x: 1.0, y: 0.0}
+  - set_robot_pose: {robot: retriever_2, x: 5.0, y: 5.0}
+  - publish_structure_plan:
+      blocks:
+        - {type: A, x: 0.5, y: 0.5, z: 0.0}
+  - publish_stockpiles:
+      stockpiles:
+        - {id: 21, x: 2.0, y: 0.0}
+  - scout_report: {scout: scout_1, type: A, x: 1.2, y: 0.3}
+  - retriever_accept: {robot: retriever_1, expect: {type: A, x: 1.2, y: 0.3}}
+  - retriever_complete: {robot: retriever_1}
+  - wait: {seconds: 1.0}
+  - manipulator_accept: {robot: manipulator_1, expect: {type: A, x: 0.5, y: 0.5}}
+  - manipulator_complete: {robot: manipulator_1}

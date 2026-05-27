@@ -1,5 +1,5 @@
 geometry_msgs/PolygonStamped stockpile
-geometry_msgs/PoseStamped block
+cc_interfaces/Block block
 ---
 bool success
 ---

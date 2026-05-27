@@ -1,22 +1,19 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>cc_localization</name>
+  <name>cc_planner</name>
   <version>0.0.0</version>
-  <description>Collective-Construction Localization: detects ArUco markers from a calibrated GoPro feed and resolves a nested pair of world coordinate frames (outer fixed frame from tags 0-3, inner workspace frame from tags 4-7), localizing additional tags inside whichever frames are visible.</description>
+  <description>Collective-Construction Planner: high-level task planner and mission state machine that sequences and dispatches construction tasks to the robot.</description>
   <maintainer email="npragin@gmail.com">Noah Pragin</maintainer>
   <license>Apache-2.0</license>
 
   <exec_depend>rclpy</exec_depend>
-  <exec_depend>tf2_ros</exec_depend>
-  <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>visualization_msgs</exec_depend>
   <exec_depend>cc_interfaces</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
-  <exec_depend>rviz2</exec_depend>
-  <exec_depend>python3-opencv</exec_depend>
-  <exec_depend>python3-numpy</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
