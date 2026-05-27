@@ -43,14 +43,14 @@ def generate_launch_description():
     return LaunchDescription([
         namespace_arg,
 
-        # map -> odom TF broadcaster
-        Node(
-            package="scouts",
-            executable="map2odom_tf",
-            name="map2odom_tf",
-            namespace=namespace,
-            output="screen",
-        ),
+        # # map -> odom TF broadcaster
+        # Node(
+        #     package="scouts",
+        #     executable="map2odom_tf",
+        #     name="map2odom_tf",
+        #     namespace=namespace,
+        #     output="screen",
+        # ),
 
         # Pioneer driver
         Node(
@@ -89,13 +89,13 @@ def generate_launch_description():
             }.items(),
         ),
 
-        Node(
-            package="scouts",
-            executable="waypoint_server",
-            name="waypoint_server",
-            namespace=namespace,
-            output="screen",
-        ),
+        # Node(
+        #     package="scouts",
+        #     executable="waypoint_server",
+        #     name="waypoint_server",
+        #     namespace=namespace,
+        #     output="screen",
+        # ),
 
 
         # IncludeLaunchDescription(
