@@ -15,11 +15,11 @@ setup(
     ],
     install_requires=["setuptools"],
     zip_safe=True,
-    maintainer="michael",
+    maintainer="michael&mj",
     maintainer_email="michael@example.com",
     description="ROS 2 ArUco marker detection with depth camera",
     license="MIT",
-    tests_require=["pytest"],
+    #tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             "aruco_depth_node = aruco_depth_ros2.aruco_depth_node:main",

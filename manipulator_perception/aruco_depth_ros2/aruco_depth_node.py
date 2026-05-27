@@ -1,11 +1,35 @@
 #!/usr/bin/env python3
 
+#Seg Fault Debug
+import os
+import sys
+import faulthandler
+
+faulthandler.enable(file=sys.stderr, all_threads=True)
+
+print("[BOOT] Python executable:", sys.executable, flush=True)
+print("[BOOT] Python version:", sys.version, flush=True)
+print("[BOOT] DISPLAY:", os.environ.get("DISPLAY"), flush=True)
+print("[BOOT] WAYLAND_DISPLAY:", os.environ.get("WAYLAND_DISPLAY"), flush=True)
+
 import cv2
 import numpy as np
+
+print("[BOOT] cv2 version:", cv2.__version__, flush=True)
+print("[BOOT] cv2 file:", cv2.__file__, flush=True)
+
+try:
+    build_info = cv2.getBuildInformation()
+    for line in build_info.splitlines():
+        if "GUI:" in line or "GTK" in line or "QT" in line:
+            print("[BOOT] OpenCV build:", line, flush=True)
+except Exception as e:
+    print("[BOOT] Could not read OpenCV build info:", e, flush=True)
 
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
+from rclpy.duration import Duration
 
 from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import PoseStamped, PoseArray, TransformStamped
@@ -15,6 +39,7 @@ from std_msgs.msg import Int32MultiArray
 from cv_bridge import CvBridge
 from tf2_geometry_msgs import do_transform_pose
 from tf2_ros import Buffer, TransformBroadcaster, TransformException, TransformListener
+
 
 
 class ArucoDepthNode(Node):
@@ -33,8 +58,8 @@ class ArucoDepthNode(Node):
         self.declare_parameter("show_window", False)
         self.declare_parameter("publish_tf", False)
         self.declare_parameter("publish_rviz_markers", False)
-        self.declare_parameter("arm_base_frame", "arm_0_base_link")
-        self.declare_parameter("world_frame", "base_link")
+        self.declare_parameter("arm_base_frame", "base_link")
+        self.declare_parameter("world_frame", "base_link") #pending link name
 
         self.color_topic = self.get_parameter("color_topic").value
         self.depth_topic = self.get_parameter("depth_topic").value
@@ -186,6 +211,10 @@ class ArucoDepthNode(Node):
 
     
     def camera_info_callback(self, msg):
+        print("[CALLBACK] camera_info_callback entered", flush=True)
+        print("[CALLBACK] camera_info frame:", msg.header.frame_id, flush=True)
+        print("[CALLBACK] camera_info K:", list(msg.k), flush=True)
+
         self.camera_matrix = np.array(msg.k, dtype=np.float32).reshape(3, 3)
 
         if len(msg.d) > 0:
@@ -193,6 +222,7 @@ class ArucoDepthNode(Node):
         else:
             self.dist_coeffs = np.zeros((5,), dtype=np.float32)
 
+    """
     def depth_callback(self, msg):
         try:
             self.latest_depth_image = self.bridge.imgmsg_to_cv2(
@@ -203,8 +233,75 @@ class ArucoDepthNode(Node):
 
         except Exception as e:
             self.get_logger().error(f"Depth image conversion failed: {e}")
+    """
+
+    def depth_callback(self, msg):
+        print("[CALLBACK] depth_callback entered", flush=True)
+        print("[CALLBACK] depth encoding:", msg.encoding, flush=True)
+        print("[CALLBACK] depth size:", msg.width, "x", msg.height, flush=True)
+
+        try:
+            print("[CALLBACK] before depth imgmsg_to_cv2", flush=True)
+            self.latest_depth_image = self.bridge.imgmsg_to_cv2(
+                msg,
+                desired_encoding="passthrough"
+            )
+            print("[CALLBACK] after depth imgmsg_to_cv2", flush=True)
+
+            self.latest_depth_encoding = msg.encoding
+
+            print(
+                "[CALLBACK] depth image:",
+                self.latest_depth_image.shape,
+                self.latest_depth_image.dtype,
+                flush=True
+            )
+
+        except Exception as e:
+            self.get_logger().error(f"Depth image conversion failed: {e}")
+            print("[CALLBACK] depth conversion exception:", e, flush=True)
+
 
     def color_callback(self, msg):
+        print("[CALLBACK] color_callback entered", flush=True)
+        print("[CALLBACK] color encoding:", msg.encoding, flush=True)
+        print("[CALLBACK] color size:", msg.width, "x", msg.height, flush=True)
+        print("[CALLBACK] color frame:", msg.header.frame_id, flush=True)
+
+        if self.camera_matrix is None:
+            print("[CALLBACK] waiting for camera_info", flush=True)
+            self.get_logger().warn("Waiting for camera_info...")
+            return
+
+        if self.latest_depth_image is None:
+            print("[CALLBACK] waiting for depth image", flush=True)
+            self.get_logger().warn("Waiting for depth image...")
+            return
+
+        try:
+            print("[CALLBACK] before color imgmsg_to_cv2", flush=True)
+            color_image = self.bridge.imgmsg_to_cv2(
+                msg,
+                desired_encoding="bgr8"
+            )
+            print("[CALLBACK] after color imgmsg_to_cv2", flush=True)
+            print("[CALLBACK] color image:", color_image.shape, color_image.dtype, flush=True)
+
+        except Exception as e:
+            self.get_logger().error(f"RGB image conversion failed: {e}")
+            print("[CALLBACK] RGB conversion exception:", e, flush=True)
+            return
+
+        print("[CALLBACK] before cvtColor", flush=True)
+        gray_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
+        print("[CALLBACK] after cvtColor", flush=True)
+
+        print("[CALLBACK] before detect_markers", flush=True)
+        corners, ids, rejected = self.detect_markers(gray_image)
+        print("[CALLBACK] after detect_markers", flush=True)
+        print("[CALLBACK] ids:", None if ids is None else ids.flatten().tolist(), flush=True)
+
+        """
         if self.camera_matrix is None:
             self.get_logger().warn("Waiting for camera_info...")
             return
@@ -225,6 +322,7 @@ class ArucoDepthNode(Node):
         gray_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
 
         corners, ids, rejected = self.detect_markers(gray_image)
+        """
 
         pose_array_msg = PoseArray()
         pose_array_msg.header = msg.header
@@ -372,8 +470,7 @@ class ArucoDepthNode(Node):
             cv2.imshow("ROS 2 ArUco Depth Detection", color_image)
             cv2.waitKey(1)
 
-    
-
+    """
     def detect_markers(self, gray_image):
         if self.detector is not None:
             corners, ids, rejected = self.detector.detectMarkers(gray_image)
@@ -411,6 +508,65 @@ class ArucoDepthNode(Node):
             self.dist_coeffs,
             flags=solvepnp_flag
         )
+
+        return success, rvec, tvec
+    """
+
+    def detect_markers(self, gray_image):
+        print("[ARUCO] detect_markers entered", flush=True)
+        print("[ARUCO] gray image:", gray_image.shape, gray_image.dtype, flush=True)
+        print("[ARUCO] detector is None:", self.detector is None, flush=True)
+
+        if self.detector is not None:
+            print("[ARUCO] before self.detector.detectMarkers", flush=True)
+            corners, ids, rejected = self.detector.detectMarkers(gray_image)
+            print("[ARUCO] after self.detector.detectMarkers", flush=True)
+        else:
+            print("[ARUCO] before cv2.aruco.detectMarkers legacy", flush=True)
+            corners, ids, rejected = cv2.aruco.detectMarkers(
+                gray_image,
+                self.aruco_dict,
+                parameters=self.aruco_params
+            )
+            print("[ARUCO] after cv2.aruco.detectMarkers legacy", flush=True)
+
+        return corners, ids, rejected
+
+    def estimate_marker_pose(self, marker_corners):
+        print("[PNP] estimate_marker_pose entered", flush=True)
+
+        half_size = self.marker_size / 2.0
+
+        object_points = np.array([
+            [-half_size,  half_size, 0.0],
+            [ half_size,  half_size, 0.0],
+            [ half_size, -half_size, 0.0],
+            [-half_size, -half_size, 0.0]
+        ], dtype=np.float32)
+
+        image_points = marker_corners.reshape((4, 2)).astype(np.float32)
+
+        print("[PNP] object_points:", object_points.tolist(), flush=True)
+        print("[PNP] image_points:", image_points.tolist(), flush=True)
+        print("[PNP] camera_matrix:", self.camera_matrix.tolist(), flush=True)
+        print("[PNP] dist_coeffs:", self.dist_coeffs.tolist(), flush=True)
+
+        if hasattr(cv2, "SOLVEPNP_IPPE_SQUARE"):
+            solvepnp_flag = cv2.SOLVEPNP_IPPE_SQUARE
+            print("[PNP] using SOLVEPNP_IPPE_SQUARE", flush=True)
+        else:
+            solvepnp_flag = cv2.SOLVEPNP_ITERATIVE
+            print("[PNP] using SOLVEPNP_ITERATIVE", flush=True)
+
+        print("[PNP] before cv2.solvePnP", flush=True)
+        success, rvec, tvec = cv2.solvePnP(
+            object_points,
+            image_points,
+            self.camera_matrix,
+            self.dist_coeffs,
+            flags=solvepnp_flag
+        )
+        print("[PNP] after cv2.solvePnP", flush=True)
 
         return success, rvec, tvec
 
@@ -603,7 +759,7 @@ class ArucoDepthNode(Node):
 
         return marker
 
-
+"""
 def main(args=None):
     rclpy.init(args=args)
 
@@ -619,6 +775,45 @@ def main(args=None):
         node.destroy_node()
         cv2.destroyAllWindows()
         rclpy.shutdown()
+"""
+
+def main(args=None):
+    print("[MAIN] Before rclpy.init()", flush=True)
+    rclpy.init(args=args)
+    print("[MAIN] After rclpy.init()", flush=True)
+
+    print("[MAIN] Before ArucoDepthNode()", flush=True)
+    node = ArucoDepthNode()
+    print("[MAIN] After ArucoDepthNode()", flush=True)
+
+    try:
+        print("[MAIN] Before rclpy.spin()", flush=True)
+        rclpy.spin(node)
+        print("[MAIN] After rclpy.spin()", flush=True)
+
+    except KeyboardInterrupt:
+        print("[MAIN] KeyboardInterrupt", flush=True)
+
+    finally:
+        print("[MAIN] Cleanup started", flush=True)
+
+        try:
+            node.destroy_node()
+            print("[MAIN] node.destroy_node() done", flush=True)
+        except Exception as e:
+            print("[MAIN] node.destroy_node() failed:", e, flush=True)
+
+        try:
+            cv2.destroyAllWindows()
+            print("[MAIN] cv2.destroyAllWindows() done", flush=True)
+        except Exception as e:
+            print("[MAIN] cv2.destroyAllWindows() failed:", e, flush=True)
+
+        try:
+            rclpy.shutdown()
+            print("[MAIN] rclpy.shutdown() done", flush=True)
+        except Exception as e:
+            print("[MAIN] rclpy.shutdown() failed:", e, flush=True)
 
 
 if __name__ == "__main__":
