@@ -61,8 +61,8 @@ RosAria2Node::Parameters::Parameters(rclcpp::Node* node) :
 
 RosAria2Node::RosAria2Node(const std::string& name) :
     rclcpp::Node(name),
-    frame_id_odom("odom"),
-    frame_id_base_link("base_link"),
+    frame_id_odom("sierra/odom"),
+    frame_id_base_link("sierra/base_link"),
     
     // runtime configuration handler
     config(std::make_shared< RosAria2Node::Parameters >(this)),
