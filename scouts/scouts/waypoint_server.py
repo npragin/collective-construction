@@ -40,34 +40,39 @@ class WaypointServer(Node):
 
         self.robot = [None, None, None] # x, y, theta
 
-        self.goal([5.0, 5.0, np.pi])
+        self.goal_pose = [5.0, 5.0]
+
+        self.control_timer = self.create_timer(
+            0.1,
+            self.control_loop
+        )
 
 
-
-    def goal(self, goal_pose):
-
-        distance = float('inf')
-        heading_error = np.pi
-
-        while distance > 0.1 or heading_error > 0.5:
-
-            dy = goal_pose[1] - self.robot[1]
-            dx = goal_pose[0] - self.robot[0]
-
-            distance = np.sqrt(dx*dx + dy*dy)
-
-            desired_heading = np.atan2(dy, dx)
-
-            heading_error = desired_heading - self.robot[2]
-
-            heading_error = np.atan2(np.sin(heading_error, np.cos(heading_error)))
-            self.get_logger().info(f'heading_error: {heading_error}')
-
-            msg = Twist()
-            msg.linear.x = min(0.3, distance)
-            msg.angular.z = heading_error
-
-            self.cmd_pub.publish(msg)
+    def control_loop(self):
+    
+        if None in self.robot:
+            return
+    
+        dx = self.goal_pose[0] - self.robot[0]
+        dy = self.goal_pose[1] - self.robot[1]
+    
+        distance = np.hypot(dx, dy)
+    
+        desired_heading = np.atan2(dy, dx)
+    
+        heading_error = desired_heading - self.robot[2]
+    
+        heading_error = np.atan2(
+            np.sin(heading_error),
+            np.cos(heading_error)
+        )
+    
+        msg = Twist()
+    
+        msg.linear.x = min(0.3, distance)
+        msg.angular.z = heading_error
+    
+        self.cmd_pub.publish(msg)
         
         self.get_logger().info(f'Goal {goal_pose} reached!')
 
