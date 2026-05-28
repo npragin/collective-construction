@@ -84,7 +84,7 @@ class WaypointServer(Node):
     
         msg = Twist()
     
-        msg.linear.x = min(0.1, distance) * 2
+        msg.linear.x = min(0.1, distance) * 1
         msg.angular.z = heading_error * 0.8
     
         self.cmd_pub.publish(msg)
