@@ -49,7 +49,9 @@ class Manipulator:
 
         node.get_logger().info('Manipulator connected!')
 
-        self.pick_pose = [0.46217,-0.030112,0.13923,-0.055763,0.9973,0.0073431,0.04721]
+        self.pick_pose = [0.42500,-0.030112,-0.12,-0.055763,0.9973,0.0073431,0.04721]
+        self.place_pose = [0.42500,-0.030112,-0.115,-0.055763,0.9973,0.0073431,0.04721]
+
 
         self.stow_pose = [0.21218,-0.075709,0.41342,0.72917,0.016382,0.68135,-0.061708]
 
@@ -295,8 +297,8 @@ class RobotFSM(Node):
 
         # place block
 
-        pick_pose = self.manipulator.make_posestamped(self.manipulator.pick_pose)
-        success = await self.manipulator.move_to_pose(pick_pose)
+        place_pose = self.manipulator.make_posestamped(self.manipulator.place_pose)
+        success = await self.manipulator.move_to_pose(place_pose)
 
         if not success:
             return False

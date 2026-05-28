@@ -369,10 +369,10 @@ class AbsoluteMoveNode(Node):
         self.get_logger().info(f"Using planner: {planner}")
         if planner == "ompl":
             motion_request.planner_id = "RRTConnectkConfigDefault"
-            motion_request.pipeline_id = "ompl"
+            motion_request._pipeline_id = "ompl"
         else:
             motion_request.planner_id = pilz_planner
-            motion_request.pipeline_id = "pilz_industrial_motion_planner"
+            motion_request._pipeline_id = "pilz_industrial_motion_planner"
 
         # Set start state to the current state
         self.get_logger().info(f"latest joint state: {self.latest_joint_state.position}")

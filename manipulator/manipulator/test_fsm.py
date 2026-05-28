@@ -20,17 +20,17 @@ class TestFSM(Node):
 
 
         self.pick = PoseStamped()
-        self.pick.header.frame_id = 'odom'
+        self.pick.header.frame_id = 'map'
         self.pick.header.stamp = self.get_clock().now().to_msg()
         self.pick.pose.position.x = 1.0
         self.pick.pose.position.y = 0.0
         self.pick.pose.orientation.w = 1.0  # Facing forward
 
         self.place = PoseStamped()
-        self.place.header.frame_id = 'odom'
+        self.place.header.frame_id = 'map'
         self.place.header.stamp = self.get_clock().now().to_msg()
         self.place.pose.position.x = 0.0
-        self.place.pose.position.y = 1.0
+        self.place.pose.position.y = -1.0
         self.place.pose.orientation.w = 1.0  # Facing forward
 
         self.send_test_goal()
