@@ -391,6 +391,7 @@ class PlannerNode(Node):
             f"Loaded structure plan with {len(self.dependency_graph)} blocks in frame "
             f"'{self._build_frame}' ({sum(len(q) for q in self.ready_blocks_by_type.values())} initially ready)"
         )
+        self._log_dependency_graph("after receiving StructurePlan")
         self.allocate_manipulator_tasks()
 
     def _construct_corner_based_dependencies(self) -> None:
@@ -460,6 +461,95 @@ class PlannerNode(Node):
             f"Constructed {corner_name} corner dependency order: "
             + " -> ".join(ordered_block_ids)
         )
+
+
+    def _dependency_status(self, node: dict[str, Any]) -> str:
+        """Return a compact human-readable dependency node status."""
+        if node["placed"]:
+            return "PLACED"
+        if node["in_progress"]:
+            return "IN_PROGRESS"
+        if self._parents_placed(node):
+            return "READY"
+        return "BLOCKED"
+
+    def _dependency_depth(self, block_id: str, cache: dict[str, int] | None = None) -> int:
+        """Return dependency depth for pretty terminal printing."""
+        if cache is None:
+            cache = {}
+        if block_id in cache:
+            return cache[block_id]
+        node = self.dependency_graph.get(block_id)
+        if not node or not node["parent_ids"]:
+            cache[block_id] = 0
+            return 0
+        cache[block_id] = 1 + max(self._dependency_depth(parent_id, cache) for parent_id in node["parent_ids"])
+        return cache[block_id]
+
+    def _sorted_dependency_nodes(self) -> list[str]:
+        """Sort nodes by dependency depth, then by block id for stable terminal output."""
+        depth_cache: dict[str, int] = {}
+        return sorted(
+            self.dependency_graph,
+            key=lambda block_id: (self._dependency_depth(block_id, depth_cache), block_id),
+        )
+
+    def _log_dependency_graph(self, reason: str = "") -> None:
+        """Print the current placement dependency graph to the terminal via ROS logs."""
+        if not self.dependency_graph:
+            self.get_logger().info("Dependency graph is empty")
+            return
+
+        title = "Dependency graph"
+        if reason:
+            title += f" ({reason})"
+
+        ordered_ids = self._sorted_dependency_nodes()
+        edge_lines: list[str] = []
+        for parent_id in ordered_ids:
+            children = self.dependency_graph[parent_id]["child_ids"]
+            if not children:
+                continue
+            for child_id in children:
+                edge_lines.append(f"{parent_id} -> {child_id}")
+
+        ready_summary = {
+            int(block_type): list(queue)
+            for block_type, queue in self.ready_blocks_by_type.items()
+            if queue
+        }
+
+        self.get_logger().info("=" * 72)
+        self.get_logger().info(title)
+        self.get_logger().info(
+            f"nodes={len(self.dependency_graph)}, edges={len(edge_lines)}, "
+            f"start_corner={self._dependency_start_corner}, frame='{self._build_frame}'"
+        )
+
+        if edge_lines:
+            self.get_logger().info("Dependency edges:")
+            for edge in edge_lines:
+                self.get_logger().info(f"  {edge}")
+        else:
+            self.get_logger().info("Dependency edges: none")
+
+        self.get_logger().info("Dependency nodes:")
+        for block_id in ordered_ids:
+            node = self.dependency_graph[block_id]
+            pose = node["pose"].pose.position
+            parents = node["parent_ids"] or []
+            children = node["child_ids"] or []
+            status = self._dependency_status(node)
+            depth = self._dependency_depth(block_id)
+            self.get_logger().info(
+                "  "
+                f"{block_id}: depth={depth}, type={node['block_type']}, status={status}, "
+                f"pos=({pose.x:.3f}, {pose.y:.3f}), "
+                f"parents={parents}, children={children}"
+            )
+
+        self.get_logger().info(f"Ready queues by block type: {ready_summary}")
+        self.get_logger().info("=" * 72)
 
 
     def _parents_placed(self, node: dict[str, Any]) -> bool:
@@ -607,6 +697,7 @@ class PlannerNode(Node):
             self._release_placeable_block(block_id)
             self.get_logger().warn(f"{robot_id} manipulation failed for block {block_id}")
         self.robot_status[robot_id] = RobotStatus.IDLE
+        self._log_dependency_graph(f"after manipulation result from {robot_id}")
         self.allocate_manipulator_tasks()
 
 
