@@ -144,9 +144,9 @@ class DetectBlock(Node):
                     )
 
                     # this code accounts for the retriever camera pointing 30 degrees down.
-                    R_cam_angle_to_robot = create_rotation_matrix(
-                        pitch=30, units="degrees"
-                    )
+                    # R_cam_angle_to_robot = create_rotation_matrix(
+                    #     pitch=30, units="degrees"
+                    # )
                     # R_cam_to_robot = R_cam_angle_to_robot @ R_image_to_robot_axes
                     R_cam_to_robot = R_image_to_robot_axes
 
