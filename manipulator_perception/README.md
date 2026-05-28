@@ -17,14 +17,14 @@ ros2 run aruco_depth_ros2 aruco_depth_node --ros-args \
   -p color_topic:=/j100_0897/sensors/camera_0/color/image \
   -p depth_topic:=/j100_0897/sensors/camera_0/depth/image \
   -p camera_info_topic:=/j100_0897/sensors/camera_0/color/camera_info \
-  -p marker_size:=0.05 \
-  -p aruco_dictionary:=4x4_50 \
+  -p marker_size:=0.07 \
+  -p aruco_dictionary:=25h9 \
   -p target_id:=-1 \
   -p arm_base_frame:=arm_0_base_link \
   -p world_frame:=base_link \
   -p publish_tf:=true \
-  -p publish_rviz_markers:=true \
-  -p show_window:=false
+  -p publish_rviz_markers:=false \
+  -p show_window:=true
 ```
 
 ### Run launch file
