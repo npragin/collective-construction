@@ -33,6 +33,7 @@ setup(
             'map2odom_tf = scouts.map2odom_tf:main',
             'waypoint_server = scouts.waypoint_server:main',
             'check_tags = scouts.check_tags:main',
+            'detect_block = scouts.detect_block:main'
         ],
     },
 )
