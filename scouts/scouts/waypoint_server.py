@@ -43,11 +43,13 @@ class WaypointServer(Node):
 
 
         self.goal_list = [(0.2, 3.0),
-                          (0.6, 3.0),
-                          (0.6, 0.25),
-                          (1.0, 0.25),
-                          (1.0, 3.0),
-                          (1.4, 3.0)]
+                          (0.8, 3.0),
+                          (0.2, 0.8),
+        ]
+                        #   (0.6, 0.25),
+                        #   (1.0, 0.25),
+                        #   (1.0, 3.0),
+                        #   (1.4, 3.0)]
 
         self.goal_idx = 0
         self.goal = self.goal_list[self.goal_idx]
