@@ -77,14 +77,13 @@ def generate_launch_description():
             ],
         ),
 
-        # map -> odom TF broadcaster
-        Node(
-            package="scouts",
-            executable="detect_block",
-            name="detect_block",
-            namespace=namespace,
-            output="screen",
-        ),
+        # Node(
+        #     package="scouts",
+        #     executable="detect_block",
+        #     name="detect_block",
+        #     namespace=namespace,
+        #     output="screen",
+        # ),
 
         # # RealSense camera
         # IncludeLaunchDescription(
@@ -106,12 +105,12 @@ def generate_launch_description():
         #     output='screen'
         # )
 
-        # Node(
-        #     package="scouts",
-        #     executable="waypoint_server",
-        #     name="waypoint_server",
-        #     namespace=namespace,
-        #     output="screen",
-        # ),
+        Node(
+            package="scouts",
+            executable="waypoint_server",
+            name="waypoint_server",
+            namespace=namespace,
+            output="screen",
+        ),
 
     ])
