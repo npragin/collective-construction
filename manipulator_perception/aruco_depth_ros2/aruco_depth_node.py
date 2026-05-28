@@ -71,6 +71,7 @@ class OpenCVArucoCompat:
         "7x7_100": "DICT_7X7_100",
         "7x7_250": "DICT_7X7_250",
         "7x7_1000": "DICT_7X7_1000",
+        "25h9": "DICT_APRILTAG_25H9"
     }
 
     def __init__(self, dictionary_name="4x4_50", logger=None):
