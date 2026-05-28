@@ -9,7 +9,7 @@ import cv2
 
 from retriever_robots.utils import create_rotation_matrix
 
-from retriever_msgs.msg import PoseStatus
+# from retriever_msgs.msg import PoseStatus
 
 import message_filters
 
@@ -44,7 +44,7 @@ class DetectBlock(Node):
 
         # communicates the location of the identified block back to the retriever node. This is a custom topic, not a standard ROS topic, so we can change it as needed.
         self.vis_pub = self.create_publisher(
-            PoseStatus, f"{self.get_namespace()}/visible_block", 10
+            Pose, f"{self.get_namespace()}/visible_block", 10
         )
 
         # describe how a real camera converts 3D poitns into image pizels
@@ -93,8 +93,8 @@ class DetectBlock(Node):
     def image_callback(self, msg):
         
         # TODO swap this with map possible map -> base_link
-        pose_status = PoseStatus()
-        pose_status.tag_in_frame = False
+        # pose_status = PoseStatus()
+        # pose_status.tag_in_frame = False
         
         try:
 
@@ -180,8 +180,8 @@ class DetectBlock(Node):
                     pose.orientation.z = z
                     pose.orientation.w = w
 
-                    pose_status.tag_in_frame = True
-                    pose_status.pose = pose
+                    # pose_status.tag_in_frame = True
+                    # pose_status.pose = pose
 
                 else:
                     self.logger.debug(
@@ -194,26 +194,27 @@ class DetectBlock(Node):
                     "No tags detected in the image.", throttle_duration_sec=1.0
                 )
 
-            if not pose_status.tag_in_frame:
-                pose_status.block_in_frame, x, y = self.segment_color(
-                    cv_image
-                )  # if no tags are detected, try to segment based on color as a fallback
-                if pose_status.block_in_frame:
-                    # create a fake pose with a y position scaled based on the negative x value of the image. Make a rough x pose based on y in frame
-                    pose_status.pose.position.x = 0.5 + max(
-                        min(-0.001 * (y - cv_image.shape[0] / 2), 0.5), -0.5
-                    )
-                    pose_status.pose.position.y = max(
-                        min(-0.001 * (x - cv_image.shape[1] / 2), 0.5), -0.5
-                    )
-                    pose_status.pose.position.z = 0.0
-                    pose_status.pose.orientation.w = 1.0
-                    self.logger.debug(
-                        f"Tag not detected, using color segmentation. Estimated pose: ({pose_status.pose.position.x}, {pose_status.pose.position.y}, {pose_status.pose.position.z})",
-                        throttle_duration_sec=1.0,
-                    )
+            # if not pose_status.tag_in_frame:
+            #     pose_status.block_in_frame, x, y = self.segment_color(
+            #         cv_image
+            #     )  # if no tags are detected, try to segment based on color as a fallback
+            #     if pose_status.block_in_frame:
+            #         # create a fake pose with a y position scaled based on the negative x value of the image. Make a rough x pose based on y in frame
+            #         pose_status.pose.position.x = 0.5 + max(
+            #             min(-0.001 * (y - cv_image.shape[0] / 2), 0.5), -0.5
+            #         )
+            #         pose_status.pose.position.y = max(
+            #             min(-0.001 * (x - cv_image.shape[1] / 2), 0.5), -0.5
+            #         )
+            #         pose_status.pose.position.z = 0.0
+            #         pose_status.pose.orientation.w = 1.0
+            #         self.logger.debug(
+            #             f"Tag not detected, using color segmentation. Estimated pose: ({pose_status.pose.position.x}, {pose_status.pose.position.y}, {pose_status.pose.position.z})",
+            #             throttle_duration_sec=1.0,
+            #         )
 
-            self.vis_pub.publish(pose_status)
+            # self.vis_pub.publish(pose_status)
+            self.vis_pub.publish(pose)
 
         except Exception as e:
             self.logger.error(f"Error converting image: {e}")
