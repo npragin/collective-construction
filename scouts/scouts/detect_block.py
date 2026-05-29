@@ -39,6 +39,13 @@ class DetectBlock(Node):
     def __init__(self, node_name):
         super().__init__(node_name)
 
+        self.tf_buffer = Buffer()
+
+        self.tf_listener = TransformListener(
+            self.tf_buffer,
+            self
+        )
+
         self.bridge = CvBridge() # converts between ros2 image messages and openCV images
 
 
