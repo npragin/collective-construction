@@ -180,6 +180,8 @@ class DetectBlock(Node):
                     pose.orientation.z = z
                     pose.orientation.w = w
 
+                    self.vis_pub.publish(pose)
+
                     # pose_status.tag_in_frame = True
                     # pose_status.pose = pose
 
@@ -214,7 +216,6 @@ class DetectBlock(Node):
             #         )
 
             # self.vis_pub.publish(pose_status)
-            self.vis_pub.publish(pose)
 
         except Exception as e:
             self.logger.error(f"Error converting image: {e}")
