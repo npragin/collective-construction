@@ -193,14 +193,20 @@ class DetectBlock(Node):
                     block_pose.pose_stamped.pose.orientation.z = z
                     block_pose.pose_stamped.pose.orientation.w = w
 
-                    self.get_logger().info(f'Pose in frame_id baselink: { block_pose.pose_stamped.pose.position.x, block_pose.pose_stamped.pose.position.y, block_pose.pose_stamped.pose.position.z}')
+                    self.get_logger().info(f'Pose in frame_id baselink: { \
+                        block_pose.pose_stamped.pose.position.x, \
+                        block_pose.pose_stamped.pose.position.y, \
+                        block_pose.pose_stamped.pose.position.z}')
 
-                    block_pose_world = self.tf_buffer.transform(
-                        block_pose,
+                    pose_stamped_world = self.tf_buffer.transform(
+                        block_pose.pose_stamped,
                         'map'
                     )
 
-                    self.get_logger().info(f'Pose in frame_id world: { block_pose_world.pose_stamped.pose.position.x, block_pose_world.pose_stamped.pose.position.y, block_pose_world.pose_stamped.pose.position.z}')
+                    self.get_logger().info(f'Pose in frame_id world: { \
+                        pose_stamped_world.pose.position.x, \
+                        pose_stamped_world.pose.position.y, \
+                        pose_stamped_world.pose.position.z}')
 
                     # needs to send msg to central planner of block in global frame
                     # needs to publish marker of block in global frame
@@ -222,7 +228,7 @@ class DetectBlock(Node):
                     # pose.orientation.z = z
                     # pose.orientation.w = w
 
-                    # self.vis_pub.publish(pose)
+                    # self.vis_pub.publish(pose) # TODO
 
                     # pose_status.tag_in_frame = True
                     # pose_status.pose = pose
