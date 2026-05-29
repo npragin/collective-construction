@@ -11,7 +11,7 @@ import cv2
 
 # from retriever_msgs.msg import PoseStatus
 
-# from block_interfaces.msg import block_pose
+from block_interfaces.msg import BlockPose
 
 import message_filters
 
@@ -46,7 +46,7 @@ class DetectBlock(Node):
 
         # communicates the location of the identified block back to the retriever node. This is a custom topic, not a standard ROS topic, so we can change it as needed.
         self.vis_pub = self.create_publisher(
-            Pose, f"{self.get_namespace()}/visible_block", 10
+            Pose, f"{self.get_namespace()}/visible_block_pose", 10
         )
 
         # describe how a real camera converts 3D poitns into image pizels
@@ -171,19 +171,48 @@ class DetectBlock(Node):
                         throttle_duration_sec=1.0,
                     )
 
-                    pose = Pose()
+                    block_pose = BlockPose()
+                    block_pose.pose_stamped.header.stamp = self.get_clock().now().to_msg()
+                    block_pose.pose_stamped.header.frame_id = 'base_link'
+                    block_pose.pose_stamped.pose.position.x = float(T_marker_to_robot[0])
+                    block_pose.pose_stamped.pose.position.y = float(T_marker_to_robot[1])
+                    block_pose.pose_stamped.pose.position.z = float(T_marker_to_robot[2])
+                    
+                    block_pose.pose_stamped.pose.orientation.x = x
+                    block_pose.pose_stamped.pose.orientation.y = y
+                    block_pose.pose_stamped.pose.orientation.z = z
+                    block_pose.pose_stamped.pose.orientation.w = w
 
-                    pose.position.x = float(T_marker_to_robot[0])
-                    pose.position.y = float(T_marker_to_robot[1])
-                    pose.position.z = float(T_marker_to_robot[2])
+                    self.get_logger().info(f'Pose in frame_id baselink: { block_pose.pose_stamped.pose.position.x, block_pose.pose_stamped.pose.position.y, block_pose.pose_stamped.pose.position.z}')
 
-                    x, y, z, w = Rotation.from_matrix(R_marker_to_robot).as_quat()
-                    pose.orientation.x = x
-                    pose.orientation.y = y
-                    pose.orientation.z = z
-                    pose.orientation.w = w
+                    block_pose_world = tf_buffer.transform(
+                        block_pose,
+                        'map'
+                    )
 
-                    self.vis_pub.publish(pose)
+                    self.get_logger().info(f'Pose in frame_id world: { block_pose_world.pose_stamped.pose.position.x, block_pose_world.pose_stamped.pose.position.y, block_pose_world.pose_stamped.pose.position.z}')
+
+                    # needs to send msg to central planner of block in global frame
+                    # needs to publish marker of block in global frame
+
+                    # step 1: convert block to global frame
+                    # step 2: publish it on visible_block_pose
+                    # step 3: publish a point market on rviz
+
+
+                    # pose = Pose()
+
+                    # pose.position.x = float(T_marker_to_robot[0])
+                    # pose.position.y = float(T_marker_to_robot[1])
+                    # pose.position.z = float(T_marker_to_robot[2])
+
+                    # x, y, z, w = Rotation.from_matrix(R_marker_to_robot).as_quat()
+                    # pose.orientation.x = x
+                    # pose.orientation.y = y
+                    # pose.orientation.z = z
+                    # pose.orientation.w = w
+
+                    # self.vis_pub.publish(pose)
 
                     # pose_status.tag_in_frame = True
                     # pose_status.pose = pose
