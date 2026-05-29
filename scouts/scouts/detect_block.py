@@ -51,7 +51,8 @@ class DetectBlock(Node):
         self.camera_matrix = None
         self.distortion_coeffs = None
 
-        self.aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_APRILTAG_25h9)
+        # self.aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_APRILTAG_25h9)
+        self.aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_APRILTAG_16h5)
         self.parameters = cv2.aruco.DetectorParameters_create()
 
         # gets actual rgb image
