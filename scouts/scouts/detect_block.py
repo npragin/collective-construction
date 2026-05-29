@@ -178,6 +178,7 @@ class DetectBlock(Node):
                     block_pose.pose_stamped.pose.position.y = float(T_marker_to_robot[1])
                     block_pose.pose_stamped.pose.position.z = float(T_marker_to_robot[2])
                     
+                    x, y, z, w = Rotation.from_matrix(R_marker_to_robot).as_quat()
                     block_pose.pose_stamped.pose.orientation.x = x
                     block_pose.pose_stamped.pose.orientation.y = y
                     block_pose.pose_stamped.pose.orientation.z = z
