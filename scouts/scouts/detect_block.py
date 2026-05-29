@@ -195,7 +195,7 @@ class DetectBlock(Node):
 
                     self.get_logger().info(f'Pose in frame_id baselink: { block_pose.pose_stamped.pose.position.x, block_pose.pose_stamped.pose.position.y, block_pose.pose_stamped.pose.position.z}')
 
-                    block_pose_world = tf_buffer.transform(
+                    block_pose_world = self.tf_buffer.transform(
                         block_pose,
                         'map'
                     )
