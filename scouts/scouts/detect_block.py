@@ -11,6 +11,8 @@ import cv2
 
 # from retriever_msgs.msg import PoseStatus
 
+# from block_interfaces.msg import block_pose
+
 import message_filters
 
 from scipy.spatial.transform import Rotation
