@@ -18,6 +18,8 @@ from scipy.spatial.transform import Rotation
 
 from tf2_ros import Buffer, TransformListener
 
+import tf2_geometry_msgs
+
 
 """
 This code was developed by Zane and Atharv and edited slightly by Liam
@@ -47,14 +49,14 @@ class DetectBlock(Node):
             self
         )
 
+        self.marker_pub = self.create_publisher(MarkerArray, 'found_blocks', 10)
+        self.found_blocks = []
+
         self.bridge = CvBridge() # converts between ros2 image messages and openCV images
 
-
-        # self.pub = self.create_publisher(Twist, f"{self.get_namespace()}/cmd_vel", 10)
-
-        # communicates the location of the identified block back to the retriever node. This is a custom topic, not a standard ROS topic, so we can change it as needed.
+        # publishes the visible block poses to the central planner
         self.vis_pub = self.create_publisher(
-            Pose, f"{self.get_namespace()}/visible_block_pose", 10
+            BlockPose, f"{self.get_namespace()}/visible_block_pose", 10
         )
 
         # describe how a real camera converts 3D poitns into image pizels
@@ -89,7 +91,7 @@ class DetectBlock(Node):
 
         self.logger = self.get_logger()
         self.logger.info(f"Launched Block Detection Node for {self.get_namespace()}")
-    
+
     def cam_callback(self, img_msg, cam_info_msg):
         self.camera_info_callback(cam_info_msg)
         self.image_callback(img_msg)
@@ -179,58 +181,52 @@ class DetectBlock(Node):
                         throttle_duration_sec=1.0,
                     )
 
-                    block_pose = BlockPose()
-                    block_pose.pose_stamped.header.stamp = self.get_clock().now().to_msg()
-                    block_pose.pose_stamped.header.frame_id = 'base_link'
-                    block_pose.pose_stamped.pose.position.x = float(T_marker_to_robot[0])
-                    block_pose.pose_stamped.pose.position.y = float(T_marker_to_robot[1])
-                    block_pose.pose_stamped.pose.position.z = float(T_marker_to_robot[2])
+                    candidate_pose_stamped = PoseStamped()
+                    candidate_pose_stamped.header.frame_id = f'{self.get_namespace()}/base_link'
+                    candidate_pose_stamped.pose.position.x = float(T_marker_to_robot[0])
+                    candidate_pose_stamped.pose.position.y = float(T_marker_to_robot[1])
+                    candidate_pose_stamped.pose.position.z = float(T_marker_to_robot[2])
                     
                     x, y, z, w = Rotation.from_matrix(R_marker_to_robot).as_quat()
-                    block_pose.pose_stamped.pose.orientation.x = x
-                    block_pose.pose_stamped.pose.orientation.y = y
-                    block_pose.pose_stamped.pose.orientation.z = z
-                    block_pose.pose_stamped.pose.orientation.w = w
+                    candidate_pose_stamped.pose.orientation.x = x
+                    candidate_pose_stamped.pose.orientation.y = y
+                    candidate_pose_stamped.pose.orientation.z = z
+                    candidate_pose_stamped.pose.orientation.w = w
 
-                    self.get_logger().info(f'Pose in frame_id baselink: { \
-                        block_pose.pose_stamped.pose.position.x, \
-                        block_pose.pose_stamped.pose.position.y, \
-                        block_pose.pose_stamped.pose.position.z}')
+                    # self.get_logger().info(f'Pose in frame_id baselink: { \
+                    #     pose_stamped.pose.position.x, \
+                    #     pose_stamped.pose.position.y, \
+                    #     pose_stamped.pose.position.z}')
 
-                    pose_stamped_world = self.tf_buffer.transform(
-                        block_pose.pose_stamped,
+                    
+                    candidate_pose_stamped = self.tf_buffer.transform(
+                        candidate_pose_stamped,
                         'map'
                     )
 
-                    self.get_logger().info(f'Pose in frame_id world: { \
-                        pose_stamped_world.pose.position.x, \
-                        pose_stamped_world.pose.position.y, \
-                        pose_stamped_world.pose.position.z}')
+                    # self.get_logger().info(f'Pose in frame_id world: { \
+                    #     pose_stamped_world.pose.position.x, \
+                    #     pose_stamped_world.pose.position.y, \
+                    #     pose_stamped_world.pose.position.z}')
+                
 
-                    # needs to send msg to central planner of block in global frame
-                    # needs to publish marker of block in global frame
+                    candidate_block = BlockPose()
+                    candidate_block.id = 0 # TODO make this the actual ID
+                    candidate_block.pose_stamped = candidate_pose_stamped
 
-                    # step 1: convert block to global frame
-                    # step 2: publish it on visible_block_pose
-                    # step 3: publish a point market on rviz
+                    # check to see if this is a duplicate block
+                    for found_block in self.found_blocks:   
+                        if found_block.id == candidate_block.id:
+                            return
+                    
+                    # this a new block
+                    self.found_blocks.append(candidate_block)
+                    
+                    # publish the newly found block
+                    self.vis_pub.publish(block_pose) # TODO
 
-
-                    # pose = Pose()
-
-                    # pose.position.x = float(T_marker_to_robot[0])
-                    # pose.position.y = float(T_marker_to_robot[1])
-                    # pose.position.z = float(T_marker_to_robot[2])
-
-                    # x, y, z, w = Rotation.from_matrix(R_marker_to_robot).as_quat()
-                    # pose.orientation.x = x
-                    # pose.orientation.y = y
-                    # pose.orientation.z = z
-                    # pose.orientation.w = w
-
-                    # self.vis_pub.publish(pose) # TODO
-
-                    # pose_status.tag_in_frame = True
-                    # pose_status.pose = pose
+                    # publish markes of blocks for rviz
+                    self.publish_markers()
 
                 else:
                     self.logger.debug(
@@ -267,6 +263,29 @@ class DetectBlock(Node):
         except Exception as e:
             self.logger.error(f"Error converting image: {e}")
 
+    def publish_markers(self):
+        marker_array = MarkerArray()
+        for block in self.found_blocks:
+            marker = Marker()
+            marker.header.frame_id = 'map'
+            marker.header.stamp = self.get_clock().now().to_msg()
+            marker.ns = 'found_blocks'
+            marker.id = block.id
+            marker.type = Marker.CUBE
+            # this is how we remove old markers
+            marker.action = Marker.ADD 
+            marker.pose = block.pose_stamped.pose
+    
+            marker.scale.x = 0.4
+            marker.scale.y = 0.8
+            marker.scale.z = 0.4
+            marker.color.r = 1.0
+            marker.color.g = 0.4
+            marker.color.b = 0.0
+            marker.color.a = 1.0
+            marker_array.markers.append(marker)
+        self.marker_pub.publish(marker_array)
+
     # def segment_color(self, cv_image):
     #         # Convert the image to HSV color space for better color segmentation
     #         hsv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
@@ -291,6 +310,7 @@ class DetectBlock(Node):
     #                 self.logger.debug(f"Segmented block at pixel coordinates: ({cX}, {cY})")
     #                 return True, cX, cY
     #         return False, None, None
+
 
 
 def main(args=None):
