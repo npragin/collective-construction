@@ -23,7 +23,7 @@ class Map2Odom(Node):
         t.child_frame_id = 'sierra/odom'
 
         # translation
-        t.transform.translation.x = 0.0
+        t.transform.translation.x = 1.0
         t.transform.translation.y = 0.0
         t.transform.translation.z = 0.0
 

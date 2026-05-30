@@ -15,15 +15,7 @@ setup(
         (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
         ('share/scouts/nav2_files', glob('nav2_files/*')),
     ],
-    install_requires=[
-        'setuptools',
-        'rclpy',
-        'geometry_msgs',
-        'sensor_msgs',
-        'cv_bridge',
-        'tf2_ros',
-        'block_interfaces',
-    ],
+
     zip_safe=True,
     maintainer='liam-bouffard',
     maintainer_email='liamtbo@gmail.com',
@@ -41,7 +33,8 @@ setup(
             'map2odom_tf = scouts.map2odom_tf:main',
             'waypoint_server = scouts.waypoint_server:main',
             'check_tags = scouts.check_tags:main',
-            'detect_block = scouts.detect_block:main'
+            'detect_block = scouts.detect_block:main',
+            "test_tf = scouts.test_tf:main",
         ],
     },
 )
