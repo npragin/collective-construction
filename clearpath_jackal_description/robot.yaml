@@ -12,6 +12,7 @@ system:
       implementation: rmw_fastrtps_cpp
     workspaces:
       - /home/robot/ws/ros2_kinova/install/setup.bash
+      - /home/robot/ws/rob599/install/setup.bash
 
 platform:
   attachments:
@@ -75,15 +76,12 @@ sensors:
         device_type: d435i
         serial_no: "138422076588"
         enable_color: true
-        rgb_camera.profile: 640,480,30
+        rgb_camera.profile: 424,240,15
         enable_depth: true
-        depth_module.profile: 640,480,30
-        pointcloud.enable: true
-        enable_accel: true
-        accel_fps: 10
-        enable_gyro: true
-        gyro_fps: 10
-        unite_imu_method: 10
+        depth_module.profile: 424,240,15
+        pointcloud.enable: false
+        enable_accel: false
+        enable_gyro: false
   lidar2d:
   - model: hokuyo_ust
     urdf_enabled: true
@@ -142,7 +140,7 @@ sensors:
         tf_ned_to_enu: true
 manipulators:
   moveit: 
-    enable: true
+    enable: false
   arms:
     - model: kinova_gen3_lite
       parent: default_mount
@@ -160,4 +158,3 @@ manipulators:
         poses:
           - name: custom
             joints: [0.0]
-
