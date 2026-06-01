@@ -49,8 +49,8 @@ class Manipulator:
 
         node.get_logger().info('Manipulator connected!')
 
-        self.pick_pose = [0.42500,-0.030112,-0.12,-0.055763,0.9973,0.0073431,0.04721]
-        self.place_pose = [0.42500,-0.030112,-0.115,-0.055763,0.9973,0.0073431,0.04721]
+        self.pick_pose = [0.46217,-0.030112,-0.1223,-0.055763,0.9973,0.0073431,0.04721]
+        self.place_pose = [0.46217,-0.030112, -0.1200,-0.055763,0.9973,0.0073431,0.04721]
 
 
         self.stow_pose = [0.21218,-0.075709,0.41342,0.72917,0.016382,0.68135,-0.061708]
@@ -157,8 +157,8 @@ class RobotFSM(Node):
         self.action_server = ActionServer(self,TransportBlock,'transport_block',execute_callback=self.execute_callback)
         self.get_logger().info('Robot FSM Ready')
 
-        self.x_offset = 1.0 #meters
-        self.y_offset = 1.0 #meters
+        self.x_offset = 0.0 #meters
+        self.y_offset = 0.0 #meters
 
     def offset_pose(self, pose, dx=0.0, dy=0.0):
         new_pose = copy.deepcopy(pose)
