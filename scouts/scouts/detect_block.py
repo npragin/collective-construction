@@ -131,6 +131,7 @@ class DetectBlock(Node):
             # if there exists atleast one marker
             if ids is not None:
                 
+                # for 
                 self.logger.debug(f"Found {len(ids)} tags: {ids.flatten()}")
 
                 # input (3D points like tag 4 corners , 2D corre. projections in image)
