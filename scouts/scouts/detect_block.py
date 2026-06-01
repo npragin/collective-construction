@@ -226,7 +226,7 @@ class DetectBlock(Node):
                     self.found_blocks.append(candidate_block)
                     
                     # publish the newly found block
-                    self.vis_pub.publish(block_pose) 
+                    self.vis_pub.publish(candidate_block) 
 
                     # publish markes of blocks for rviz
                     self.publish_markers()
