@@ -131,110 +131,114 @@ class DetectBlock(Node):
             # if there exists atleast one marker
             if ids is not None:
                 
-                # for 
                 self.logger.debug(f"Found {len(ids)} tags: {ids.flatten()}")
-
-                # input (3D points like tag 4 corners , 2D corre. projections in image)
-                # output (rot vector and translation of the camera)
-
-                # both of these are w.r.t to the camera.
-                # rvec: rotation vector. ex: [0, 0, 1.5] -> rotate around z axis by 1.5 radians
-                # tvec: translation vector. ex: [1,2,3] -> object  is 1m on x, 2m on y, and 3 on z
-                ok, rvec, tvec = cv2.solvePnP(
-                    OBJ_PTS,
-                    corners[0][0],
-                    self.camera_matrix,
-                    self.distortion_coeffs,
-                    flags=cv2.SOLVEPNP_IPPE_SQUARE,
-                )
-                self.get_logger().info(f'rvec: {rvec}\ntvec: {tvec}')
-
-                # if PnP can be sovled for tag 
-                if ok:
-
-                    # converts rotation vector into 3x3 rot matrix
-                    R_marker_to_cam, _ = cv2.Rodrigues(rvec)
-                    # Image X is robot -Y, Image Y is robot -Z, Image Z is robot X
-                    R_image_to_robot_axes = np.array(
-                        [
-                            [0, 0, 1],
-                            [-1, 0, 0],
-                            [0, -1, 0],
-                        ]
+                for i in range(len(ids)):
+                        
+                    block_id = ids[i][0]
+                    corner = corners[i][0]
+    
+                    # input (3D points like tag 4 corners , 2D corre. projections in image)
+                    # output (rot vector and translation of the camera)
+    
+                    # both of these are w.r.t to the camera.
+                    # rvec: rotation vector. ex: [0, 0, 1.5] -> rotate around z axis by 1.5 radians
+                    # tvec: translation vector. ex: [1,2,3] -> object  is 1m on x, 2m on y, and 3 on z
+                    ok, rvec, tvec = cv2.solvePnP(
+                        OBJ_PTS,
+                        # corners[0][0],
+                        corner,
+                        self.camera_matrix,
+                        self.distortion_coeffs,
+                        flags=cv2.SOLVEPNP_IPPE_SQUARE,
                     )
-
-                    # this code accounts for the retriever camera pointing 30 degrees down.
-                    # R_cam_angle_to_robot = create_rotation_matrix(
-                    #     pitch=30, units="degrees"
-                    # )
-                    # R_cam_to_robot = R_cam_angle_to_robot @ R_image_to_robot_axes
-                    R_cam_to_robot = R_image_to_robot_axes
-
-
-                    R_marker_to_robot = R_cam_to_robot @ R_marker_to_cam
-                    R_marker_to_robot = R_marker_to_robot
-
-                    T_cam_to_robot = np.array(
-                        [[-0.1], [0], [0]]
-                    )  # camera is 10cm in front of the robot axis
-
-                    T_marker_in_cam = tvec.reshape(3, 1)
-                    T_marker_to_robot = (
-                        R_cam_to_robot @ T_marker_in_cam + T_cam_to_robot
-                    )
-
-                    self.logger.debug(
-                        f"Tag Detected: Marker center is {T_marker_to_robot[0]} m away,  {T_marker_to_robot[1]} m to the left, and {T_marker_to_robot[2]} m down)",
-                        throttle_duration_sec=1.0,
-                    )
-
-                    candidate_pose_stamped = PoseStamped()
-                    candidate_pose_stamped.header.frame_id = f'{self.get_namespace()}/base_link'[1:]
-                    candidate_pose_stamped.pose.position.x = float(T_marker_to_robot[0])
-                    candidate_pose_stamped.pose.position.y = float(T_marker_to_robot[1])
-                    candidate_pose_stamped.pose.position.z = float(T_marker_to_robot[2])
+                    self.get_logger().info(f'rvec: {rvec}\ntvec: {tvec}')
+    
+                    # if PnP can be sovled for tag 
+                    if ok:
+    
+                        # converts rotation vector into 3x3 rot matrix
+                        R_marker_to_cam, _ = cv2.Rodrigues(rvec)
+                        # Image X is robot -Y, Image Y is robot -Z, Image Z is robot X
+                        R_image_to_robot_axes = np.array(
+                            [
+                                [0, 0, 1],
+                                [-1, 0, 0],
+                                [0, -1, 0],
+                            ]
+                        )
+    
+                        # this code accounts for the retriever camera pointing 30 degrees down.
+                        # R_cam_angle_to_robot = create_rotation_matrix(
+                        #     pitch=30, units="degrees"
+                        # )
+                        # R_cam_to_robot = R_cam_angle_to_robot @ R_image_to_robot_axes
+                        R_cam_to_robot = R_image_to_robot_axes
+    
+    
+                        R_marker_to_robot = R_cam_to_robot @ R_marker_to_cam
+                        R_marker_to_robot = R_marker_to_robot
+    
+                        T_cam_to_robot = np.array(
+                            [[-0.1], [0], [0]]
+                        )  # camera is 10cm in front of the robot axis
+    
+                        T_marker_in_cam = tvec.reshape(3, 1)
+                        T_marker_to_robot = (
+                            R_cam_to_robot @ T_marker_in_cam + T_cam_to_robot
+                        )
+    
+                        self.logger.debug(
+                            f"Tag Detected: Marker center is {T_marker_to_robot[0]} m away,  {T_marker_to_robot[1]} m to the left, and {T_marker_to_robot[2]} m down)",
+                            throttle_duration_sec=1.0,
+                        )
+    
+                        candidate_pose_stamped = PoseStamped()
+                        candidate_pose_stamped.header.frame_id = f'{self.get_namespace()}/base_link'[1:]
+                        candidate_pose_stamped.pose.position.x = float(T_marker_to_robot[0])
+                        candidate_pose_stamped.pose.position.y = float(T_marker_to_robot[1])
+                        candidate_pose_stamped.pose.position.z = float(T_marker_to_robot[2])
+                        
+                        x, y, z, w = Rotation.from_matrix(R_marker_to_robot).as_quat()
+                        candidate_pose_stamped.pose.orientation.x = x
+                        candidate_pose_stamped.pose.orientation.y = y
+                        candidate_pose_stamped.pose.orientation.z = z
+                        candidate_pose_stamped.pose.orientation.w = w
+    
+                        self.get_logger().info(f'Pose in frame_id baselink: { \
+                            candidate_pose_stamped.pose.position.x, \
+                            candidate_pose_stamped.pose.position.y, \
+                            candidate_pose_stamped.pose.position.z}')
+    
+                        
+                        candidate_pose_stamped = self.tf_buffer.transform(
+                            candidate_pose_stamped,
+                            'map'
+                        )
+    
+                        self.get_logger().info(f'Pose in frame_id world: { \
+                            candidate_pose_stamped.pose.position.x, \
+                            candidate_pose_stamped.pose.position.y, \
+                            candidate_pose_stamped.pose.position.z}')
                     
-                    x, y, z, w = Rotation.from_matrix(R_marker_to_robot).as_quat()
-                    candidate_pose_stamped.pose.orientation.x = x
-                    candidate_pose_stamped.pose.orientation.y = y
-                    candidate_pose_stamped.pose.orientation.z = z
-                    candidate_pose_stamped.pose.orientation.w = w
-
-                    self.get_logger().info(f'Pose in frame_id baselink: { \
-                        candidate_pose_stamped.pose.position.x, \
-                        candidate_pose_stamped.pose.position.y, \
-                        candidate_pose_stamped.pose.position.z}')
-
-                    
-                    candidate_pose_stamped = self.tf_buffer.transform(
-                        candidate_pose_stamped,
-                        'map'
-                    )
-
-                    self.get_logger().info(f'Pose in frame_id world: { \
-                        candidate_pose_stamped.pose.position.x, \
-                        candidate_pose_stamped.pose.position.y, \
-                        candidate_pose_stamped.pose.position.z}')
-                
-
-                    candidate_block = BlockPose()
-                    candidate_block.id = 0 # TODO make this the actual ID
-                    candidate_block.pose_stamped = candidate_pose_stamped
-
-                    # check to see if this is a duplicate block
-                    for found_block in self.found_blocks:   
-                        if found_block.id == candidate_block.id:
-                            self.get_logger().info(f'Block {found_block.id} is a duplicate')
-                            return
-                    
-                    # this a new block
-                    self.found_blocks.append(candidate_block)
-                    
-                    # publish the newly found block
-                    self.vis_pub.publish(candidate_block) 
-
-                    # publish markes of blocks for rviz
-                    self.publish_markers()
+    
+                        candidate_block = BlockPose()
+                        candidate_block.id = block_id # TODO make this the actual ID
+                        candidate_block.pose_stamped = candidate_pose_stamped
+    
+                        # check to see if this is a duplicate block
+                        for found_block in self.found_blocks:   
+                            if found_block.id == candidate_block.id:
+                                self.get_logger().info(f'Block {found_block.id} is a duplicate')
+                                return
+                        
+                        # this a new block
+                        self.found_blocks.append(candidate_block)
+                        
+                        # publish the newly found block
+                        self.vis_pub.publish(candidate_block) 
+    
+                        # publish markes of blocks for rviz
+                        self.publish_markers()
 
                 else:
                     self.logger.debug(
