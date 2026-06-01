@@ -20,6 +20,7 @@ from tf2_ros import Buffer, TransformListener
 
 import tf2_geometry_msgs
 
+from visualization_msgs.msg import Marker, MarkerArray
 
 """
 This code was developed by Zane and Atharv and edited slightly by Liam
