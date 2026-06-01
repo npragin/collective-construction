@@ -152,7 +152,7 @@ class DetectBlock(Node):
                         self.distortion_coeffs,
                         flags=cv2.SOLVEPNP_IPPE_SQUARE,
                     )
-                    self.get_logger().info(f'rvec: {rvec}\ntvec: {tvec}')
+                    # self.get_logger().info(f'rvec: {rvec}\ntvec: {tvec}')
     
                     # if PnP can be sovled for tag 
                     if ok:
@@ -205,10 +205,10 @@ class DetectBlock(Node):
                         candidate_pose_stamped.pose.orientation.z = z
                         candidate_pose_stamped.pose.orientation.w = w
     
-                        self.get_logger().info(f'Pose in frame_id baselink: { \
-                            candidate_pose_stamped.pose.position.x, \
-                            candidate_pose_stamped.pose.position.y, \
-                            candidate_pose_stamped.pose.position.z}')
+                        # self.get_logger().info(f'Pose in frame_id baselink: { \
+                            # candidate_pose_stamped.pose.position.x, \
+                            # candidate_pose_stamped.pose.position.y, \
+                            # candidate_pose_stamped.pose.position.z}')
     
                         
                         candidate_pose_stamped = self.tf_buffer.transform(
@@ -216,22 +216,22 @@ class DetectBlock(Node):
                             'map'
                         )
     
-                        self.get_logger().info(f'Pose in frame_id world: { \
-                            candidate_pose_stamped.pose.position.x, \
-                            candidate_pose_stamped.pose.position.y, \
-                            candidate_pose_stamped.pose.position.z}')
+                        # self.get_logger().info(f'Pose in frame_id world: { \
+                            # candidate_pose_stamped.pose.position.x, \
+                            # candidate_pose_stamped.pose.position.y, \
+                            # candidate_pose_stamped.pose.position.z}')
                     
     
                         candidate_block = BlockPose()
                         # candidate_block.id = block_id # TODO make this the actual ID
-                        candidate_block.id = 0 # TODO make this the actual ID
+                        candidate_block.id = 0# TODO make this the actual ID
 
                         candidate_block.pose_stamped = candidate_pose_stamped
     
                         # check to see if this is a duplicate block
                         for found_block in self.found_blocks:   
                             if found_block.id == candidate_block.id:
-                                self.get_logger().info(f'Block {found_block.id} is a duplicate')
+                                # self.get_logger().info(f'Block {found_block.id} is a duplicate')
                                 continue
                         
                         # this a new block
