@@ -145,6 +145,7 @@ class DetectBlock(Node):
                     self.distortion_coeffs,
                     flags=cv2.SOLVEPNP_IPPE_SQUARE,
                 )
+                self.get_logger().info(f'rvec: {rvec}\ntvec: {tvec}')
 
                 # if PnP can be sovled for tag 
                 if ok:
