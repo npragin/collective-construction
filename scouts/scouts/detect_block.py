@@ -232,7 +232,7 @@ class DetectBlock(Node):
                         for found_block in self.found_blocks:   
                             if found_block.id == candidate_block.id:
                                 self.get_logger().info(f'Block {found_block.id} is a duplicate')
-                                return
+                                continue
                         
                         # this a new block
                         self.found_blocks.append(candidate_block)
