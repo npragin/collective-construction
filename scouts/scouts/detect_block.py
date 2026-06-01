@@ -220,6 +220,7 @@ class DetectBlock(Node):
                     # check to see if this is a duplicate block
                     for found_block in self.found_blocks:   
                         if found_block.id == candidate_block.id:
+                            self.get_logger().info(f'Block {found_block.id} is a duplicate')
                             return
                     
                     # this a new block
