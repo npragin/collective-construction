@@ -42,6 +42,8 @@ class DetectBlock(Node):
     def __init__(self, node_name):
         super().__init__(node_name)
 
+        self.get_logger().info('DetectBlock Node is Up!')
+
         self.tf_buffer = Buffer()
 
         self.tf_listener = TransformListener(
