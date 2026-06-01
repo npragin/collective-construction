@@ -134,7 +134,7 @@ class DetectBlock(Node):
                 self.logger.debug(f"Found {len(ids)} tags: {ids.flatten()}")
                 for i in range(len(ids)):
                         
-                    block_id = ids[i][0]
+                    block_id = ids[i].item()
                     corner = corners[i][0]
                     self.get_logger().info(f'id: {block_id}')
     
