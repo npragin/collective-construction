@@ -223,7 +223,9 @@ class DetectBlock(Node):
                     
     
                         candidate_block = BlockPose()
-                        candidate_block.id = block_id # TODO make this the actual ID
+                        # candidate_block.id = block_id # TODO make this the actual ID
+                        candidate_block.id = 0 # TODO make this the actual ID
+
                         candidate_block.pose_stamped = candidate_pose_stamped
     
                         # check to see if this is a duplicate block
