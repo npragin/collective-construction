@@ -125,7 +125,8 @@ class DetectBlock(Node):
                 cv_image, self.aruco_dict, parameters=self.parameters
             )
 
-            self.get_logger().info('here')
+            self.get_logger().info(f'ids: {ids}')
+
             # if there exists atleast one marker
             if ids is not None:
                 
