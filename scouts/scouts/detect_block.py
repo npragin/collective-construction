@@ -199,10 +199,10 @@ class DetectBlock(Node):
                     candidate_pose_stamped.pose.orientation.z = z
                     candidate_pose_stamped.pose.orientation.w = w
 
-                    # self.get_logger().info(f'Pose in frame_id baselink: { \
-                    #     pose_stamped.pose.position.x, \
-                    #     pose_stamped.pose.position.y, \
-                    #     pose_stamped.pose.position.z}')
+                    self.get_logger().info(f'Pose in frame_id baselink: { \
+                        candidate_pose_stamped.pose.position.x, \
+                        candidate_pose_stamped.pose.position.y, \
+                        candidate_pose_stamped.pose.position.z}')
 
                     
                     candidate_pose_stamped = self.tf_buffer.transform(
@@ -210,10 +210,10 @@ class DetectBlock(Node):
                         'map'
                     )
 
-                    # self.get_logger().info(f'Pose in frame_id world: { \
-                    #     pose_stamped_world.pose.position.x, \
-                    #     pose_stamped_world.pose.position.y, \
-                    #     pose_stamped_world.pose.position.z}')
+                    self.get_logger().info(f'Pose in frame_id world: { \
+                        candidate_pose_stamped.pose.position.x, \
+                        candidate_pose_stamped.pose.position.y, \
+                        candidate_pose_stamped.pose.position.z}')
                 
 
                     candidate_block = BlockPose()
