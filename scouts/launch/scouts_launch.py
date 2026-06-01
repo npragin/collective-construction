@@ -60,30 +60,30 @@ def generate_launch_description():
         #     output="screen",
         # ),
 
-        # # Rosaria pioneer driver
-        # Node(
-        #     package="rosaria2",
-        #     executable="rosaria2_debug",
-        #     name="rosaria2_node",
-        #     namespace=namespace,
-        #     output="screen",
-        #     remappings=[
-        #         ("pose", "odom"),
-        #     ],
-        #     parameters=[
-        #         {
-        #             "port": "/dev/ttyUSB0",
-        #             "frame_id": "sierra/base_link",
-        #             "odom_frame_id": "sierra/odom",
-        #             "tf_prefix": "rename_when_launching",
-        #         }
-        #     ],
-        #     arguments=[
-        #         "--ros-args",
-        #         "--log-level",
-        #         "warn",
-        #     ],
-        # ),
+        # Rosaria pioneer driver
+        Node(
+            package="rosaria2",
+            executable="rosaria2_debug",
+            name="rosaria2_node",
+            namespace=namespace,
+            output="screen",
+            remappings=[
+                ("pose", "odom"),
+            ],
+            parameters=[
+                {
+                    "port": "/dev/ttyUSB0",
+                    "frame_id": "sierra/base_link",
+                    "odom_frame_id": "sierra/odom",
+                    "tf_prefix": "rename_when_launching",
+                }
+            ],
+            arguments=[
+                "--ros-args",
+                "--log-level",
+                "warn",
+            ],
+        ),
 
         # RealSense camera
         IncludeLaunchDescription(
