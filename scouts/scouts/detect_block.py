@@ -136,7 +136,7 @@ class DetectBlock(Node):
                         
                     block_id = ids[i][0]
                     corner = corners[i][0]
-                    self.get_logger.info(f'id: {block_id}')
+                    self.get_logger().info(f'id: {block_id}')
     
                     # input (3D points like tag 4 corners , 2D corre. projections in image)
                     # output (rot vector and translation of the camera)
