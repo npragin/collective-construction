@@ -113,7 +113,7 @@ class DetectBlock(Node):
         # pose_status.tag_in_frame = False
         
         try:
-
+            self.get_logger().info('here')
             if self.camera_matrix is None or self.distortion_coeffs is None:
                 self.logger.warn("Camera info not received yet.")
                 return
