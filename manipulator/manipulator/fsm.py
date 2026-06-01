@@ -9,12 +9,13 @@ from rclpy.action import ActionServer, ActionClient
 
 from geometry_msgs.msg import PoseStamped
 
-from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
+from nav2_simple_commander.robot_navigator import BasicNavigator
+from nav2_msgs.action import NavigateToPose
+from action_msgs.msg import GoalStatus
 
 from manipulator_interface.action import TransportBlock
 from manipulator_interface.action import AbsoluteMove
 from control_msgs.action import GripperCommand
-import time
 
 class State(Enum):
 
@@ -39,7 +40,7 @@ class Manipulator:
 
         self.absolute_move_client = ActionClient(node, AbsoluteMove,'absolute_move')
 
-        self.gripper_client = ActionClient(node,GripperCommand,f'/{self.namespace}/arm_0_gripper_controller/gripper_cmd')
+        self.gripper_client = ActionClient(node,GripperCommand,f'/{self.namespace}/manipulators/arm_0_gripper_controller/gripper_cmd')
 
         node.get_logger().info('Waiting for manipulation action servers...')
 
@@ -48,7 +49,9 @@ class Manipulator:
 
         node.get_logger().info('Manipulator connected!')
 
-        self.pick_pose = [0.46217,-0.030112,0.13923,-0.055763,0.9973,0.0073431,0.04721]
+        self.pick_pose = [0.46217,-0.030112,-0.1223,-0.055763,0.9973,0.0073431,0.04721]
+        self.place_pose = [0.46217,-0.030112, -0.1200,-0.055763,0.9973,0.0073431,0.04721]
+
 
         self.stow_pose = [0.21218,-0.075709,0.41342,0.72917,0.016382,0.68135,-0.061708]
 
@@ -144,6 +147,9 @@ class RobotFSM(Node):
         self.get_logger().info('Waiting for Nav2...')
         self.navigator.waitUntilNav2Active(localizer="bt_navigator")
 
+        self.nav_to_pose_client = ActionClient(self, NavigateToPose, f'/{self.namespace}/navigate_to_pose')
+        self.nav_to_pose_client.wait_for_server()
+
         self.manipulator = Manipulator(self)
         self.manipulator.namespace = self.manipulator_namespace
         self.state = State.IDLE
@@ -151,8 +157,8 @@ class RobotFSM(Node):
         self.action_server = ActionServer(self,TransportBlock,'transport_block',execute_callback=self.execute_callback)
         self.get_logger().info('Robot FSM Ready')
 
-        self.x_offset = 1.0 #meters
-        self.y_offset = 1.0 #meters
+        self.x_offset = 0.0 #meters
+        self.y_offset = 0.0 #meters
 
     def offset_pose(self, pose, dx=0.0, dy=0.0):
         new_pose = copy.deepcopy(pose)
@@ -232,20 +238,19 @@ class RobotFSM(Node):
     async def navigate_to_pose(self, pose):
 
         self.get_logger().info(f'Navigating to: 'f'({pose.pose.position.x}, 'f'{pose.pose.position.y})')
-        self.navigator.goToPose(pose)
 
-        while not self.navigator.isTaskComplete():
-            feedback = self.navigator.getFeedback()
+        goal_msg = NavigateToPose.Goal()
+        goal_msg.pose = pose
 
-            if feedback:
-                self.get_logger().info('Robot navigating...')
+        goal_handle = await self.nav_to_pose_client.send_goal_async(goal_msg)
 
-            # await asyncio.sleep(0.5)
-            time.sleep(0.5)
+        if not goal_handle.accepted:
+            self.get_logger().error('Navigation goal rejected')
+            return False
 
-        result = self.navigator.getResult()
+        result = await goal_handle.get_result_async()
 
-        if result == TaskResult.SUCCEEDED:
+        if result.status == GoalStatus.STATUS_SUCCEEDED:
             self.get_logger().info('Navigation succeeded')
             return True
 
@@ -292,8 +297,8 @@ class RobotFSM(Node):
 
         # place block
 
-        pick_pose = self.manipulator.make_posestamped(self.manipulator.pick_pose)
-        success = await self.manipulator.move_to_pose(pick_pose)
+        place_pose = self.manipulator.make_posestamped(self.manipulator.place_pose)
+        success = await self.manipulator.move_to_pose(place_pose)
 
         if not success:
             return False

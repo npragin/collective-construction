@@ -117,6 +117,16 @@ class AbsoluteMoveNode(Node):
 
     def joint_states_callback(self, msg):
         self.latest_joint_state = msg
+
+    @staticmethod
+    def _moveit_error_name(code: int) -> str:
+        for attr in dir(MoveItErrorCodes):
+            if attr.startswith('_'):
+                continue
+            value = getattr(MoveItErrorCodes, attr)
+            if isinstance(value, int) and value == code:
+                return attr
+        return "UNKNOWN"
     
     # def inverse_pose(self, offset_dict):
     #     new_dict = {}
@@ -204,7 +214,7 @@ class AbsoluteMoveNode(Node):
         # self.switch_controller(servo=False)
 
         response = AbsoluteMove.Result()
-        for i in range(2):
+        for _ in range(2):
             #setup moveit goal
             self.reference_frame = goal_handle.request.pose.header.frame_id
             self.target_frame = goal_handle.request.target_frame
@@ -237,6 +247,9 @@ class AbsoluteMoveNode(Node):
 
             # Check result status
             status = result_handle.status
+            result = result_handle.result
+            error_code = result.error_code.val
+            error_name = self._moveit_error_name(error_code)
             if status == 4:  # STATUS_SUCCEEDED
                 self.get_logger().info('Motion execution succeeded!')
                 self.succeed = True
@@ -244,10 +257,17 @@ class AbsoluteMoveNode(Node):
                 response.message = "Motion Executed Successfully"
                 break
             else:
-                self.get_logger().error(f'Motion execution failed with status: {status}')
+                planned_pts = len(result.planned_trajectory.joint_trajectory.points)
+                executed_pts = len(result.executed_trajectory.joint_trajectory.points)
+                self.get_logger().error(
+                    f'Motion execution failed. action_status={status}, '
+                    f'moveit_error_code={error_code} ({error_name}), '
+                    f'planned_traj_points={planned_pts}, '
+                    f'executed_traj_points={executed_pts}'
+                )
                 self.succeed = False
                 response.success = False
-                response.message = "Unable to Execute Motion"
+                response.message = f"Unable to Execute Motion: {error_name} (code {error_code})"
         if not self.succeed:
             goal_handle.abort()
         else: 
@@ -349,7 +369,7 @@ class AbsoluteMoveNode(Node):
         self.get_logger().info(f"Using planner: {planner}")
         if planner == "ompl":
             motion_request.planner_id = "RRTConnectkConfigDefault"
-            motion_request._pipeline_id = "_ompl"
+            motion_request._pipeline_id = "ompl"
         else:
             motion_request.planner_id = pilz_planner
             motion_request._pipeline_id = "pilz_industrial_motion_planner"
