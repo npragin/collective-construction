@@ -113,7 +113,6 @@ class DetectBlock(Node):
         # pose_status.tag_in_frame = False
         
         try:
-            self.get_logger().info('here')
             if self.camera_matrix is None or self.distortion_coeffs is None:
                 self.logger.warn("Camera info not received yet.")
                 return
@@ -126,6 +125,7 @@ class DetectBlock(Node):
                 cv_image, self.aruco_dict, parameters=self.parameters
             )
 
+            self.get_logger().info('here')
             # if there exists atleast one marker
             if ids is not None:
                 
