@@ -126,6 +126,7 @@ class DetectBlock(Node):
             )
 
             self.get_logger().info(f'ids: {ids}')
+            self.get_logger().info(f'corners: {corners}')
 
             # if there exists atleast one marker
             if ids is not None:
