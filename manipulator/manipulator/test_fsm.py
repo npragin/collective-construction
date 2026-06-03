@@ -63,6 +63,9 @@ class TestFSM(Node):
         if status == 4:  # SUCCEEDED
             self.get_logger().info('Action succeeded')
             return
+        else:
+            self.get_logger().error(f'Action failed with status: {status}')
+            return
 
     def feedback_callback(self, feedback_msg):
         feedback = feedback_msg.feedback

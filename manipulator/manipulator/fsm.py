@@ -31,16 +31,16 @@ class State(Enum):
 
 class Manipulator:
 
-    def __init__(self, node):
+    def __init__(self, node, namespace="j100_0897/manipulators"):
         
         self.node = node
-        self.namespace = "j100_0897"
+        self.namespace = namespace
         self.target_frame = "arm_0_end_effector_link"
         self.reference_frame = "arm_0_base_link"
 
         self.absolute_move_client = ActionClient(node, AbsoluteMove,'absolute_move')
 
-        self.gripper_client = ActionClient(node,GripperCommand,f'/{self.namespace}/manipulators/arm_0_gripper_controller/gripper_cmd')
+        self.gripper_client = ActionClient(node,GripperCommand,f'/{self.namespace}/arm_0_gripper_controller/gripper_cmd')
 
         node.get_logger().info('Waiting for manipulation action servers...')
 
@@ -150,8 +150,7 @@ class RobotFSM(Node):
         self.nav_to_pose_client = ActionClient(self, NavigateToPose, f'/{self.namespace}/navigate_to_pose')
         self.nav_to_pose_client.wait_for_server()
 
-        self.manipulator = Manipulator(self)
-        self.manipulator.namespace = self.manipulator_namespace
+        self.manipulator = Manipulator(self, namespace=self.manipulator_namespace)
         self.state = State.IDLE
 
         self.action_server = ActionServer(self,TransportBlock,'transport_block',execute_callback=self.execute_callback)
@@ -172,23 +171,28 @@ class RobotFSM(Node):
     async def execute_callback(self, goal_handle):
         self.get_logger().info('Received transport mission')
 
+        result = TransportBlock.Result()
+
         if self.state != State.IDLE:
             goal_handle.reject()
-            return TransportBlock.Result()
+            result.success = False
+            result.message = 'Robot is currently busy with another mission'
+            return result
 
         pickup_pose = goal_handle.request.pickup_pose
         dropoff_pose = goal_handle.request.dropoff_pose
 
         success = await self.execute_mission(pickup_pose,dropoff_pose)
-        result = TransportBlock.Result()
         result.success = success
+        self.get_logger().info(f'Mission execution result: {success}')
 
         if success:
             result.message = 'Mission complete'
+            self.state = State.IDLE
             goal_handle.succeed()
-
         else:
             result.message = 'Mission failed'
+            self.state = State.IDLE
             goal_handle.abort()
 
         return result
@@ -201,9 +205,10 @@ class RobotFSM(Node):
 
         self.state = State.NAVIGATE_TO_PICKUP
         success = await self.navigate_to_pose(pickup_pose)
-
+        self.get_logger().info(f'Arrived at pickup location: {success}')
         if not success:
             return False
+        
         
         # picking up the block
 
