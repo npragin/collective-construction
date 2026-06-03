@@ -10,6 +10,10 @@ system:
     domain_id: 0
     middleware:
       implementation: rmw_fastrtps_cpp
+      discovery: server
+      servers:
+        - ip: 192.168.0.93
+          port: 11811
     workspaces:
       - /home/robot/ws/ros2_kinova/install/setup.bash
       - /home/robot/ws/rob599/install/setup.bash
