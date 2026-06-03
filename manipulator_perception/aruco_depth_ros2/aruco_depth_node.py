@@ -121,6 +121,8 @@ class OpenCVArucoCompat:
         )
 
     def _create_detector_parameters(self):
+        if not hasattr(self.aruco, "ArucoDetector") and hasattr(self.aruco, "DetectorParameters_create"):
+            return self.aruco.DetectorParameters_create()
         if hasattr(self.aruco, "DetectorParameters"):
             return self.aruco.DetectorParameters()
 
@@ -344,6 +346,7 @@ class ArucoDepthNode(Node):
             self.get_logger().error(f"Depth image conversion failed: {exc}")
 
     def color_callback(self, msg):
+        self.get_logger().debug("Received color image, processing for ArUco detection...")
         if self.camera_matrix is None:
             self.get_logger().warn("Waiting for camera_info...")
             return
