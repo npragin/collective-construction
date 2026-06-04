@@ -192,7 +192,7 @@ class DetectBlock(Node):
                             f"Tag Detected: Marker center is {T_marker_to_robot[0]} m away,  {T_marker_to_robot[1]} m to the left, and {T_marker_to_robot[2]} m down)",
                             throttle_duration_sec=1.0,
                         )
-                        #push
+                        
                         candidate_pose_stamped = PoseStamped()
                         # candidate_pose_stamped.header.frame_id = f'{self.get_namespace()}/aruco_31'[1:]
                         candidate_pose_stamped.header.frame_id = 'aruco_31'
@@ -206,10 +206,10 @@ class DetectBlock(Node):
                         candidate_pose_stamped.pose.orientation.z = z
                         candidate_pose_stamped.pose.orientation.w = w
     
-                        # self.get_logger().info(f'Pose in frame_id baselink: { \
-                            # candidate_pose_stamped.pose.position.x, \
-                            # candidate_pose_stamped.pose.position.y, \
-                            # candidate_pose_stamped.pose.position.z}')
+                        self.get_logger().info(f'Pose in frame_id baselink: { \
+                            candidate_pose_stamped.pose.position.x, \
+                            candidate_pose_stamped.pose.position.y, \
+                            candidate_pose_stamped.pose.position.z}')
     
                         
                         candidate_pose_stamped = self.tf_buffer.transform(
