@@ -229,7 +229,7 @@ class DetectBlock(Node):
                         # candidate_block.id = block_id # TODO make this the actual ID
                         candidate_block.type = Block.TYPE_B # TODO this is just an examples, need to change
 
-                        candidate_block.pose_stamped = candidate_pose_stamped
+                        candidate_block.pose = candidate_pose_stamped
     
                         # check to see if this is a duplicate block
                         # for found_block in self.found_blocks:   
