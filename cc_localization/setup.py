@@ -31,6 +31,7 @@ setup(
         "console_scripts": [
             "aruco_detect = cc_localization.aruco_detect:main",
             "cc_localization = cc_localization.cc_localization_node:main",
+            "hsv_probe = cc_localization.hsv_probe:main",
         ],
     },
 )
