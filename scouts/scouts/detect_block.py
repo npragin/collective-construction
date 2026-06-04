@@ -113,7 +113,6 @@ class DetectBlock(Node):
         # TODO swap this with map possible map -> base_link
         # pose_status = PoseStatus()
         # pose_status.tag_in_frame = False
-        
         try:
             if self.camera_matrix is None or self.distortion_coeffs is None:
                 self.logger.warn("Camera info not received yet.")
@@ -299,9 +298,9 @@ class DetectBlock(Node):
             marker.action = Marker.ADD 
             marker.pose = block.pose.pose
     
-            marker.scale.x = 0.4
-            marker.scale.y = 0.8
-            marker.scale.z = 0.4
+            marker.scale.x = 0.1
+            marker.scale.y = 0.2
+            marker.scale.z = 0.1
             marker.color.r = 1.0
             marker.color.g = 0.4
             marker.color.b = 0.0
