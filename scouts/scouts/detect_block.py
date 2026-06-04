@@ -192,7 +192,7 @@ class DetectBlock(Node):
                             f"Tag Detected: Marker center is {T_marker_to_robot[0]} m away,  {T_marker_to_robot[1]} m to the left, and {T_marker_to_robot[2]} m down)",
                             throttle_duration_sec=1.0,
                         )
-    
+                        #push
                         candidate_pose_stamped = PoseStamped()
                         # candidate_pose_stamped.header.frame_id = f'{self.get_namespace()}/aruco_31'[1:]
                         candidate_pose_stamped.header.frame_id = 'aruco_31'
