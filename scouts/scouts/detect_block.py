@@ -10,7 +10,8 @@ import cv2
 
 # from retriever_msgs.msg import PoseStatus
 
-from block_interfaces.msg import BlockPose, Block
+from block_interfaces.msg import BlockPose
+from cc_interfaces import Block
 
 import message_filters
 
