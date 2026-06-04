@@ -16,6 +16,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/ManipulationTask.action"
   "msg/FoundBlock.msg"
   "msg/FoundBlockArray.msg"
+  "msg/Block.msg"
   DEPENDENCIES geometry_msgs action_msgs std_msgs
 )
 
