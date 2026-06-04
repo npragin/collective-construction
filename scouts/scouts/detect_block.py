@@ -235,6 +235,7 @@ class DetectBlock(Node):
                             if found_id == candidate_block_id:
                                 self.get_logger().info(f'Block {candidate_block_id} is a duplicate')
                                 duplicate = True
+
                         if duplicate:
                             continue
                         
