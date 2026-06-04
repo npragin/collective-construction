@@ -223,11 +223,8 @@ class DetectBlock(Node):
                             candidate_pose_stamped.pose.position.x, \
                             candidate_pose_stamped.pose.position.y, \
                             candidate_pose_stamped.pose.position.z}')
-                        #tmp
     
                         candidate_block = Block()
-                        # candidate_block.id = block_id # TODO make this the actual ID
-                        # candidate_block.id = block_id # TODO make this the actual ID
                         candidate_block.type = Block.TYPE_B # TODO this is just an examples, need to change
 
                         candidate_block.pose = candidate_pose_stamped
@@ -284,12 +281,12 @@ class DetectBlock(Node):
 
     def publish_markers(self):
         marker_array = MarkerArray()
-        for block in self.found_blocks:
+        for block, block_id in self.found_blocks:
             marker = Marker()
             marker.header.frame_id = 'world'
             marker.header.stamp = self.get_clock().now().to_msg()
             marker.ns = 'found_blocks'
-            marker.id = block.id
+            marker.id = block_id
             marker.type = Marker.CUBE
             # this is how we remove old markers
             marker.action = Marker.ADD 
