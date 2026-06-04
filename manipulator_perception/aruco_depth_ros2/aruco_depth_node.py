@@ -101,6 +101,11 @@ class OpenCVArucoCompat:
         self.aruco = cv2.aruco
         self.parameters = self._create_detector_parameters()
 
+        # Sub-pixel corner refinement markedly improves pose accuracy.
+        if hasattr(self.parameters, "cornerRefinementMethod"):
+            if hasattr(self.aruco, "CORNER_REFINE_SUBPIX"):
+                self.parameters.cornerRefinementMethod = self.aruco.CORNER_REFINE_SUBPIX
+
         names = self._resolve_names(dictionary_name)
 
         # name -> (detector_or_None, dictionary)
@@ -255,12 +260,12 @@ class ArucoDepthNode(Node):
         self.declare_parameter("depth_topic", "/j100_0897/sensors/camera_0/depth/image")
         self.declare_parameter("camera_info_topic", "/j100_0897/sensors/camera_0/color/camera_info")
 
-        self.declare_parameter("marker_size", 0.10)
-        self.declare_parameter("aruco_dictionary", "all")
+        self.declare_parameter("marker_size", 0.0495)
+        self.declare_parameter("aruco_dictionary", "25h9")
         self.declare_parameter("target_id", -1)
 
         self.declare_parameter("show_window", False)
-        self.declare_parameter("publish_tf", False)
+        self.declare_parameter("publish_tf", True)
         self.declare_parameter("publish_rviz_markers", False)
 
         # Use the arm base as the default target frame.
@@ -398,6 +403,11 @@ class ArucoDepthNode(Node):
         except Exception as exc:
             self.get_logger().error(f"Depth image conversion failed: {exc}")
 
+    def backproject(self, u, v, depth_m):
+        fx, fy = self.camera_matrix[0, 0], self.camera_matrix[1, 1]
+        cx, cy = self.camera_matrix[0, 2], self.camera_matrix[1, 2]
+        return (u - cx) * depth_m / fx, (v - cy) * depth_m / fy, depth_m
+
     def color_callback(self, msg):
         self.get_logger().debug("Received color image, processing for ArUco detection...")
         if self.camera_matrix is None:
@@ -467,6 +477,10 @@ class ArucoDepthNode(Node):
                     center_y,
                     window_size=5
                 )
+
+                # Prefer depth-measured position; keep PnP only as fallback.
+                if depth_m > 0.0:
+                    x, y, z = self.backproject(center_x, center_y, depth_m)
 
                 self.aruco_backend.draw_axes(
                     color_image,
@@ -753,7 +767,7 @@ class ArucoDepthNode(Node):
             2
         )
 
-    def create_rviz_marker(self, header, marker_id, pose):
+    def create_rviz_marker(self, header, marker_id, dict_name, pose):
         marker = Marker()
 
         marker.header = header
@@ -762,7 +776,6 @@ class ArucoDepthNode(Node):
 
         marker.type = Marker.CUBE
         marker.action = Marker.ADD
-
         marker.pose = pose
 
         marker.scale.x = float(self.marker_size)
@@ -773,7 +786,6 @@ class ArucoDepthNode(Node):
         marker.color.g = 1.0
         marker.color.b = 0.0
         marker.color.a = 0.8
-
         marker.lifetime.sec = 0
         marker.lifetime.nanosec = 300_000_000
 
