@@ -230,10 +230,13 @@ class DetectBlock(Node):
                         candidate_block.pose = candidate_pose_stamped
     
                         # check to see if this is a duplicate block
+                        duplicate = False
                         for _, found_id in self.found_blocks:   
                             if found_id == candidate_block_id:
                                 self.get_logger().info(f'Block {candidate_block_id} is a duplicate')
-                                continue
+                                duplicate = True
+                        if duplicate:
+                            continue
                         
                         # this a new block
                         self.found_blocks.append((candidate_block, candidate_block_id))
