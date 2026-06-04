@@ -66,7 +66,7 @@ ARGUMENTS = [
 
 def launch_setup(context, *args, **kwargs):
     # Packages
-    pkg_clearpath_nav2_demos = get_package_share_directory('clearpath_nav2_demos')
+    pkg_nav = get_package_share_directory('nav')
     pkg_nav2_bringup = get_package_share_directory('nav2_bringup')
 
     # Launch Configurations
@@ -87,10 +87,11 @@ def launch_setup(context, *args, **kwargs):
     if len(eval_scan_topic) == 0:
         eval_scan_topic = f'/{namespace}/sensors/lidar2d_0/scan'
 
+    # Use the repo's nav2.yaml (global_frame: world for BEV-fused localization),
+    # not the installed clearpath_nav2_demos default (global_frame: map).
     file_parameters = PathJoinSubstitution([
-        pkg_clearpath_nav2_demos,
+        pkg_nav,
         'config',
-        platform_model,
         'nav2.yaml'])
 
     rewritten_parameters = RewrittenYaml(

@@ -1,7 +1,7 @@
 bt_navigator:
   ros__parameters:
     enable_stamped_cmd_vel: true
-    global_frame: map
+    global_frame: world
     robot_base_frame: base_link
     odom_topic: platform/odom/filtered
     bt_loop_duration: 10
@@ -36,8 +36,8 @@ controller_server:
     general_goal_checker:
       stateful: true
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
+      xy_goal_tolerance: 0.10
+      yaw_goal_tolerance: 0.10
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"
       time_steps: 56
@@ -137,7 +137,7 @@ local_costmap:
       resolution: 0.06
       footprint: "[ [0.254, 0.2159], [0.254, -0.2159], [-0.254, -0.2159], [-0.254, 0.2159] ]"
       always_send_full_costmap: true
-      plugins: ["static_layer", "voxel_layer", "inflation_layer"]
+      plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 4.0
@@ -172,11 +172,14 @@ global_costmap:
       enable_stamped_cmd_vel: true
       update_frequency: 1.0
       publish_frequency: 1.0
-      global_frame: map
+      global_frame: world
       robot_base_frame: base_link
       footprint: "[ [0.254, 0.2159], [0.254, -0.2159], [-0.254, -0.2159], [-0.254, 0.2159] ]"
       resolution: 0.06
-      track_unknown_space: true
+      rolling_window: true
+      width: 12
+      height: 12
+      track_unknown_space: false
       always_send_full_costmap: true
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       obstacle_layer:
@@ -195,7 +198,8 @@ global_costmap:
           obstacle_min_range: 0.0
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: true
+        map_topic: /free_map
+        map_subscribe_transient_local: false
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 4.0
@@ -241,7 +245,7 @@ behavior_server:
       plugin: "nav2_behaviors::Wait"
     assisted_teleop:
       plugin: "nav2_behaviors::AssistedTeleop"
-    global_frame: map
+    global_frame: world
     local_frame: odom
     robot_base_frame: base_link
     transform_tolerance: 0.1
