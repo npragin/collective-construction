@@ -39,10 +39,11 @@ from cv_bridge import CvBridge
 from tf2_geometry_msgs import do_transform_pose
 from tf2_ros import Buffer, TransformBroadcaster, TransformException, TransformListener
 
-
 class OpenCVArucoCompat:
     """
-    Small compatibility adapter for OpenCV ArUco API differences.
+    Compatibility adapter for OpenCV ArUco, now supporting multiple
+    dictionaries at once. Detection runs across every active dictionary
+    and results are merged, tagged with their source dictionary.
 
     OpenCV 4.6 often uses:
         DetectorParameters_create()
@@ -71,8 +72,22 @@ class OpenCVArucoCompat:
         "7x7_100": "DICT_7X7_100",
         "7x7_250": "DICT_7X7_250",
         "7x7_1000": "DICT_7X7_1000",
-        "25h9": "DICT_APRILTAG_25H9"
+        "25h9": "DICT_APRILTAG_25H9",
+        "16h5": "DICT_APRILTAG_16H5",
     }
+
+    # "all" expands to one superset dict per family: e.g. 4x4_1000 already
+    # contains every 4x4_50/100/250 marker, so scanning the smaller ones too
+    # would be wasted work.
+    ALL_FAMILIES = [
+        "4x4_1000",
+        "5x5_1000",
+        "6x6_1000",
+        "7x7_1000",
+        "original",
+        "25h9",
+        "16h5",
+    ]
 
     def __init__(self, dictionary_name="4x4_50", logger=None):
         self.logger = logger
@@ -84,22 +99,55 @@ class OpenCVArucoCompat:
             )
 
         self.aruco = cv2.aruco
-        self.dictionary = self._create_dictionary(dictionary_name)
         self.parameters = self._create_detector_parameters()
-        self.detector = self._create_new_detector_if_available()
+
+        names = self._resolve_names(dictionary_name)
+
+        # name -> (detector_or_None, dictionary)
+        self.detectors = {}
+        for name in names:
+            dictionary = self._create_dictionary(name)
+            detector = self._create_new_detector_if_available(dictionary)
+            self.detectors[name] = (detector, dictionary)
 
         if self.logger is not None:
-            mode = "ArucoDetector API" if self.detector is not None else "legacy detectMarkers API"
+            any_new = any(d is not None for d, _ in self.detectors.values())
+            mode = "ArucoDetector API" if any_new else "legacy detectMarkers API"
             self.logger.info(f"OpenCV version: {cv2.__version__}")
             self.logger.info(f"OpenCV file: {cv2.__file__}")
             self.logger.info(f"Using ArUco mode: {mode}")
+            self.logger.info(f"Active dictionaries: {list(self.detectors.keys())}")
+
+    def _resolve_names(self, dictionary_name):
+        if isinstance(dictionary_name, (list, tuple)):
+            requested = list(dictionary_name)
+        elif isinstance(dictionary_name, str) and \
+                dictionary_name.strip().lower() in ("all", "all_families"):
+            requested = list(self.ALL_FAMILIES)
+        else:
+            requested = [n.strip() for n in str(dictionary_name).split(",") if n.strip()]
+
+        names = []
+        for n in requested:
+            if n in self.DICTIONARIES:
+                names.append(n)
+            elif self.logger is not None:
+                self.logger.warn(f"Unknown ArUco dictionary '{n}', ignoring")
+
+        if not names:
+            if self.logger is not None:
+                self.logger.warn("No valid dictionaries given, falling back to '4x4_50'")
+            names = ["4x4_50"]
+
+        seen = set()
+        unique = []
+        for n in names:
+            if n not in seen:
+                seen.add(n)
+                unique.append(n)
+        return unique
 
     def _create_dictionary(self, name):
-        if name not in self.DICTIONARIES:
-            if self.logger is not None:
-                self.logger.warn(f"Unknown ArUco dictionary '{name}', falling back to '4x4_50'")
-            name = "4x4_50"
-
         dict_attr_name = self.DICTIONARIES[name]
 
         if not hasattr(self.aruco, dict_attr_name):
@@ -135,12 +183,12 @@ class OpenCVArucoCompat:
             "Neither DetectorParameters() nor DetectorParameters_create() exists."
         )
 
-    def _create_new_detector_if_available(self):
+    def _create_new_detector_if_available(self, dictionary):
         if not hasattr(self.aruco, "ArucoDetector"):
             return None
 
         try:
-            return self.aruco.ArucoDetector(self.dictionary, self.parameters)
+            return self.aruco.ArucoDetector(dictionary, self.parameters)
         except Exception as exc:
             if self.logger is not None:
                 self.logger.warn(
@@ -150,50 +198,54 @@ class OpenCVArucoCompat:
             return None
 
     def detect_markers(self, gray_image):
-        if self.detector is not None:
-            return self.detector.detectMarkers(gray_image)
+        """
+        Returns:
+            corners:    list of corner arrays (one per detected marker)
+            ids:        np.ndarray (N, 1) or None if nothing found
+            dict_names: list of length N, source dictionary per marker
+        """
+        all_corners = []
+        all_ids = []
+        all_dicts = []
 
-        if not hasattr(self.aruco, "detectMarkers"):
-            raise RuntimeError(
-                "cv2.aruco.detectMarkers() is missing and ArucoDetector is unavailable."
-            )
+        for name, (detector, dictionary) in self.detectors.items():
+            if detector is not None:
+                corners, ids, _ = detector.detectMarkers(gray_image)
+            elif hasattr(self.aruco, "detectMarkers"):
+                corners, ids, _ = self.aruco.detectMarkers(
+                    gray_image, dictionary, parameters=self.parameters
+                )
+            else:
+                raise RuntimeError(
+                    "cv2.aruco.detectMarkers() is missing and ArucoDetector is unavailable."
+                )
 
-        return self.aruco.detectMarkers(
-            gray_image,
-            self.dictionary,
-            parameters=self.parameters
-        )
+            if ids is None or len(ids) == 0:
+                continue
+
+            for c, mid in zip(corners, ids.flatten()):
+                all_corners.append(c)
+                all_ids.append(int(mid))
+                all_dicts.append(name)
+
+        if not all_ids:
+            return [], None, []
+
+        ids_array = np.array(all_ids, dtype=np.int32).reshape(-1, 1)
+        return all_corners, ids_array, all_dicts
 
     def draw_detected_markers(self, image, corners, ids):
         if ids is None or corners is None or len(corners) == 0:
             return
-
         if hasattr(self.aruco, "drawDetectedMarkers"):
             self.aruco.drawDetectedMarkers(image, corners, ids)
 
     def draw_axes(self, image, camera_matrix, dist_coeffs, rvec, tvec, axis_length):
         if hasattr(cv2, "drawFrameAxes"):
-            cv2.drawFrameAxes(
-                image,
-                camera_matrix,
-                dist_coeffs,
-                rvec,
-                tvec,
-                axis_length
-            )
+            cv2.drawFrameAxes(image, camera_matrix, dist_coeffs, rvec, tvec, axis_length)
             return
-
-        # Very old fallback. Usually unnecessary for OpenCV 4.6+.
         if hasattr(self.aruco, "drawAxis"):
-            self.aruco.drawAxis(
-                image,
-                camera_matrix,
-                dist_coeffs,
-                rvec,
-                tvec,
-                axis_length
-            )
-
+            self.aruco.drawAxis(image, camera_matrix, dist_coeffs, rvec, tvec, axis_length)
 
 class ArucoDepthNode(Node):
     def __init__(self):
@@ -204,7 +256,7 @@ class ArucoDepthNode(Node):
         self.declare_parameter("camera_info_topic", "/j100_0897/sensors/camera_0/color/camera_info")
 
         self.declare_parameter("marker_size", 0.10)
-        self.declare_parameter("aruco_dictionary", "4x4_50")
+        self.declare_parameter("aruco_dictionary", "all")
         self.declare_parameter("target_id", -1)
 
         self.declare_parameter("show_window", False)
@@ -214,8 +266,8 @@ class ArucoDepthNode(Node):
         # Use the arm base as the default target frame.
         # Override at runtime if needed:
         #   -p arm_base_frame:=base_link
-        self.declare_parameter("arm_base_frame", "base_link")
-        self.declare_parameter("world_frame", "base_link") #pending
+        self.declare_parameter("arm_base_frame", "arm_0_base_link")
+        self.declare_parameter("world_frame", "base_link")
 
         self.color_topic = self.get_parameter("color_topic").value
         self.depth_topic = self.get_parameter("depth_topic").value
@@ -368,7 +420,7 @@ class ArucoDepthNode(Node):
         gray_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
 
         try:
-            corners, ids, rejected = self.aruco_backend.detect_markers(gray_image)
+            corners, ids, marker_dicts = self.aruco_backend.detect_markers(gray_image)
         except Exception as exc:
             self.get_logger().error(f"ArUco detection failed: {exc}")
             return
@@ -392,6 +444,7 @@ class ArucoDepthNode(Node):
 
             for i, marker_id_np in enumerate(ids.flatten()):
                 marker_id = int(marker_id_np)
+                dict_name = marker_dicts[i]
 
                 if self.target_id != -1 and marker_id != self.target_id:
                     continue
@@ -452,19 +505,12 @@ class ArucoDepthNode(Node):
 
                 if self.publish_tf_enabled:
                     self.publish_aruco_tf(
-                        msg.header,
-                        marker_id,
-                        x,
-                        y,
-                        z,
-                        quat
+                        msg.header, marker_id, dict_name, x, y, z, quat
                     )
 
                 if self.publish_rviz_markers_enabled:
                     rviz_marker = self.create_rviz_marker(
-                        msg.header,
-                        marker_id,
-                        pose_msg.pose
+                        msg.header, marker_id, dict_name, pose_msg.pose
                     )
                     marker_array_msg.markers.append(rviz_marker)
 
@@ -660,7 +706,7 @@ class ArucoDepthNode(Node):
 
         transform.header.stamp = header.stamp
         transform.header.frame_id = header.frame_id
-        transform.child_frame_id = f"aruco_marker_{marker_id}"
+        transform.child_frame_id = f"aruco_{dict_name}_{marker_id}"   # namespaced
 
         transform.transform.translation.x = float(x)
         transform.transform.translation.y = float(y)
@@ -716,7 +762,7 @@ class ArucoDepthNode(Node):
         marker = Marker()
 
         marker.header = header
-        marker.ns = "aruco_markers"
+        marker.ns = f"aruco_{dict_name}"      # ns per family avoids id overwrite
         marker.id = int(marker_id)
 
         marker.type = Marker.CUBE
