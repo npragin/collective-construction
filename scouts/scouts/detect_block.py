@@ -258,6 +258,9 @@ class DetectBlock(Node):
                 self.logger.debug(
                     "No tags detected in the image.", throttle_duration_sec=1.0
                 )
+                
+            # publish markes of blocks for rviz
+            self.publish_markers()
 
             # if not pose_status.tag_in_frame:
             #     pose_status.block_in_frame, x, y = self.segment_color(
