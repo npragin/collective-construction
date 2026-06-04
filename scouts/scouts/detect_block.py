@@ -194,7 +194,7 @@ class DetectBlock(Node):
                         )
     
                         candidate_pose_stamped = PoseStamped()
-                        candidate_pose_stamped.header.frame_id = f'{self.get_namespace()}/base_link'[1:]
+                        candidate_pose_stamped.header.frame_id = f'{self.get_namespace()}/aruco_31'[1:]
                         candidate_pose_stamped.pose.position.x = float(T_marker_to_robot[0])
                         candidate_pose_stamped.pose.position.y = float(T_marker_to_robot[1])
                         candidate_pose_stamped.pose.position.z = float(T_marker_to_robot[2])
@@ -213,7 +213,7 @@ class DetectBlock(Node):
                         
                         candidate_pose_stamped = self.tf_buffer.transform(
                             candidate_pose_stamped,
-                            'map'
+                            'world'
                         )
     
                         # self.get_logger().info(f'Pose in frame_id world: { \
@@ -282,7 +282,7 @@ class DetectBlock(Node):
         marker_array = MarkerArray()
         for block in self.found_blocks:
             marker = Marker()
-            marker.header.frame_id = 'map'
+            marker.header.frame_id = 'world'
             marker.header.stamp = self.get_clock().now().to_msg()
             marker.ns = 'found_blocks'
             marker.id = block.id

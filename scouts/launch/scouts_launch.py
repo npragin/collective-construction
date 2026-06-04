@@ -44,14 +44,14 @@ def generate_launch_description():
         namespace_arg,
 
         # map -> odom TF broadcaster
-        Node(
-            package="scouts",
-            executable="map2odom_tf",
-            name="map2odom_tf",
-            namespace=namespace,
-            output="screen",
-        ),
-        # tmp
+        # Node(
+        #     package="scouts",
+        #     executable="map2odom_tf",
+        #     name="map2odom_tf",
+        #     namespace=namespace,
+        #     output="screen",
+        # ),
+        
         # Node(
         #     package="scouts",
         #     executable="test_tf",
@@ -60,30 +60,30 @@ def generate_launch_description():
         #     output="screen",
         # ),
 
-        # Rosaria pioneer driver
-        Node(
-            package="rosaria2",
-            executable="rosaria2_debug",
-            name="rosaria2_node",
-            namespace=namespace,
-            output="screen",
-            remappings=[
-                ("pose", "odom"),
-            ],
-            parameters=[
-                {
-                    "port": "/dev/ttyUSB0",
-                    "frame_id": "sierra/base_link",
-                    "odom_frame_id": "sierra/odom",
-                    "tf_prefix": "rename_when_launching",
-                }
-            ],
-            arguments=[
-                "--ros-args",
-                "--log-level",
-                "warn",
-            ],
-        ),
+        # # Rosaria pioneer driver
+        # Node(
+        #     package="rosaria2",
+        #     executable="rosaria2_debug",
+        #     name="rosaria2_node",
+        #     namespace=namespace,
+        #     output="screen",
+        #     remappings=[
+        #         ("pose", "odom"),
+        #     ],
+        #     parameters=[
+        #         {
+        #             "port": "/dev/ttyUSB0",
+        #             "frame_id": "sierra/base_link",
+        #             "odom_frame_id": "sierra/odom",
+        #             "tf_prefix": "rename_when_launching",
+        #         }
+        #     ],
+        #     arguments=[
+        #         "--ros-args",
+        #         "--log-level",
+        #         "warn",
+        #     ],
+        # ),
 
         # RealSense camera
         IncludeLaunchDescription(
