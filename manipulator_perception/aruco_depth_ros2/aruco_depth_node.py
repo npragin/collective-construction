@@ -36,7 +36,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from std_msgs.msg import Int32MultiArray
 
 from cv_bridge import CvBridge
-from tf2_geometry_msgs import do_transform_pose
+from tf2_geometry_msgs import do_transform_pose_stamped
 from tf2_ros import Buffer, TransformBroadcaster, TransformException, TransformListener
 
 class OpenCVArucoCompat:
@@ -688,10 +688,9 @@ class ArucoDepthNode(Node):
                 timeout=Duration(seconds=0.2)
             )
 
-            transformed = do_transform_pose(pose_msg, transform)
+            transformed = do_transform_pose_stamped(pose_msg, transform)
             transformed.header.stamp = pose_msg.header.stamp
             transformed.header.frame_id = target_frame
-
             return transformed
 
         except TransformException as exc:

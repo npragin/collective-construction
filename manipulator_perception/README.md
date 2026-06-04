@@ -20,8 +20,8 @@ ros2 run aruco_depth_ros2 aruco_depth_node --ros-args \
   -p marker_size:=0.07 \
   -p aruco_dictionary:=25h9 \
   -p target_id:=-1 \
-  -p arm_base_frame:=arm_0_base_link \
-  -p world_frame:=base_link \
+  -p arm_base_frame:=/j100_0897/arm_0_base_link \
+  -p world_frame:=/j100_0897/base_link \
   -p publish_tf:=true \
   -p publish_rviz_markers:=false \
   -p show_window:=false
