@@ -223,7 +223,7 @@ class DetectBlock(Node):
                             candidate_pose_stamped.pose.position.x, \
                             candidate_pose_stamped.pose.position.y, \
                             candidate_pose_stamped.pose.position.z}')
-                    
+                        #tmp
     
                         candidate_block = Block()
                         # candidate_block.id = block_id # TODO make this the actual ID
