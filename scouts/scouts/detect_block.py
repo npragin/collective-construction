@@ -136,9 +136,9 @@ class DetectBlock(Node):
                 self.logger.debug(f"Found {len(ids)} tags: {ids.flatten()}")
                 for i in range(len(ids)):
                         
-                    block_id = ids[i].item()
+                    candidate_block_id = ids[i].item()
                     corner = corners[i][0]
-                    self.get_logger().info(f'id: {block_id}')
+                    self.get_logger().info(f'id: {candidate_block_id}')
     
                     # input (3D points like tag 4 corners , 2D corre. projections in image)
                     # output (rot vector and translation of the camera)
@@ -233,13 +233,13 @@ class DetectBlock(Node):
                         candidate_block.pose = candidate_pose_stamped
     
                         # check to see if this is a duplicate block
-                        # for found_block in self.found_blocks:   
-                        #     if found_block.id == candidate_block.id:
-                        #         # self.get_logger().info(f'Block {found_block.id} is a duplicate')
-                        #         continue
+                        for _, found_id in self.found_blocks:   
+                            if found_id == candidate_block_id:
+                                self.get_logger().info(f'Block {candidate_block_id} is a duplicate')
+                                continue
                         
-                        # # this a new block
-                        # self.found_blocks.append(candidate_block)
+                        # this a new block
+                        self.found_blocks.append((candidate_block, candidate_block_id))
                         
                         # publish the newly found block
                         self.vis_pub.publish(candidate_block) 
