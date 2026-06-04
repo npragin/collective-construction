@@ -290,7 +290,7 @@ class DetectBlock(Node):
             marker.type = Marker.CUBE
             # this is how we remove old markers
             marker.action = Marker.ADD 
-            marker.pose = block.pose_stamped.pose
+            marker.pose = block.pose.pose
     
             marker.scale.x = 0.4
             marker.scale.y = 0.8
