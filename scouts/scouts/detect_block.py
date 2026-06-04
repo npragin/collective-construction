@@ -125,8 +125,8 @@ class DetectBlock(Node):
                 cv_image, self.aruco_dict, parameters=self.parameters
             )
 
-            self.get_logger().info(f'ids: {ids}')
-            self.get_logger().info(f'corners: {corners}')
+            # self.get_logger().info(f'ids: {ids}')
+            # self.get_logger().info(f'corners: {corners}')
 
             # if there exists atleast one marker
             if ids is not None:
@@ -216,10 +216,10 @@ class DetectBlock(Node):
                             'world'
                         )
     
-                        # self.get_logger().info(f'Pose in frame_id world: { \
-                            # candidate_pose_stamped.pose.position.x, \
-                            # candidate_pose_stamped.pose.position.y, \
-                            # candidate_pose_stamped.pose.position.z}')
+                        self.get_logger().info(f'Pose in frame_id world: { \
+                            candidate_pose_stamped.pose.position.x, \
+                            candidate_pose_stamped.pose.position.y, \
+                            candidate_pose_stamped.pose.position.z}')
                     
     
                         candidate_block = BlockPose()
