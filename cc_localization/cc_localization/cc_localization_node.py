@@ -79,6 +79,28 @@ def rect_in_world(R2: np.ndarray, t2: np.ndarray, length: float, width: float) -
     return (R2 @ local.T).T + t2
 
 
+def image_to_grid_homography(
+    R_cw: np.ndarray,
+    t_w: np.ndarray,
+    mtx: np.ndarray,
+    resolution: float,
+) -> np.ndarray:
+    """
+    Build the 3x3 homography mapping image pixels to KOZ-grid cell coordinates.
+
+    Uses the world->camera pose (R_wc = R_cw.T, t_wc = t_w) and intrinsics K to
+    construct H_wi = K @ [r1 | r2 | t_wc] (ground-plane projection). Inverts to
+    get image->world (meters), then scales by 1/resolution to land in grid cells.
+    """
+    R_wc = R_cw.T
+    H_wi = mtx @ np.column_stack((R_wc[:, 0], R_wc[:, 1], t_w))
+    H_iw_meters = np.linalg.inv(H_wi)
+    S = np.array(
+        [[1.0 / resolution, 0.0, 0.0], [0.0, 1.0 / resolution, 0.0], [0.0, 0.0, 1.0]]
+    )
+    return S @ H_iw_meters
+
+
 def rotation_matrix_to_quaternion(R: np.ndarray) -> tuple[float, float, float, float]:
     """Convert a 3x3 rotation matrix to a (x, y, z, w) quaternion."""
     trace = R[0, 0] + R[1, 1] + R[2, 2]
@@ -130,6 +152,9 @@ class CcLocalizationNode(Node):
         self.declare_parameter("camera_frame", "camera")
         self.declare_parameter("tick_rate_hz", 30.0)
         self.declare_parameter("stockpile_ema_alpha", 0.3)
+        self.declare_parameter("orange_hsv_low", [5.0, 100.0, 100.0])
+        self.declare_parameter("orange_hsv_high", [25.0, 255.0, 255.0])
+        self.declare_parameter("orange_morph_kernel", 3)
 
         device_id = self.get_parameter("device_id").get_parameter_value().integer_value
         self.marker_size = self.get_parameter("marker_size").get_parameter_value().double_value
@@ -148,6 +173,17 @@ class CcLocalizationNode(Node):
         tick_rate_hz = self.get_parameter("tick_rate_hz").get_parameter_value().double_value
         self.stockpile_ema_alpha = (
             self.get_parameter("stockpile_ema_alpha").get_parameter_value().double_value
+        )
+        self.orange_hsv_low = np.array(
+            self.get_parameter("orange_hsv_low").get_parameter_value().double_array_value,
+            dtype=np.uint8,
+        )
+        self.orange_hsv_high = np.array(
+            self.get_parameter("orange_hsv_high").get_parameter_value().double_array_value,
+            dtype=np.uint8,
+        )
+        self.orange_morph_kernel = (
+            self.get_parameter("orange_morph_kernel").get_parameter_value().integer_value
         )
 
         self.outer_corners = corners_for(OUTER_TAG_IDS, world_length, world_width)
@@ -173,6 +209,7 @@ class CcLocalizationNode(Node):
         self.broadcaster = TransformBroadcaster(self)
         self.marker_pub = self.create_publisher(MarkerArray, "workspace_markers", 1)
         self.koz_pub = self.create_publisher(OccupancyGrid, "koz_mask", 1)
+        self.block_pub = self.create_publisher(OccupancyGrid, "block_mask", 1)
         self.free_map_pub = self.create_publisher(OccupancyGrid, "free_map", 1)
         self.stockpile_pub = self.create_publisher(Stockpiles, "stockpile_polygons", 1)
         self.build_site_pub = self.create_publisher(PolygonStamped, "build_site_polygon", 1)
@@ -265,14 +302,28 @@ class CcLocalizationNode(Node):
         grid.info.origin.orientation.w = 1.0
         return grid, width, height
 
-    def build_koz_grid(self, rects_world: list[np.ndarray]) -> OccupancyGrid:
-        """Rasterize rotated rectangles (each Nx2 in world coords) into an OccupancyGrid."""
+    def detect_orange_mask(self, frame_bgr: np.ndarray) -> np.ndarray:
+        """Return a uint8 mask (0/255) of orange pixels after HSV threshold + morph open/close."""
+        hsv = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange(hsv, self.orange_hsv_low, self.orange_hsv_high)
+        k = self.orange_morph_kernel
+        if k > 0:
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        return mask
+
+    def build_koz_grid(self, rects_world: list[np.ndarray], extra_mask: np.ndarray | None = None) -> OccupancyGrid:
+        """Rasterize rotated rectangles (each Nx2 in world coords) and OR an optional
+        grid-resolution mask into an OccupancyGrid."""
         grid, width, height = self._new_grid_skeleton()
         res = self.koz_resolution
         mask = np.zeros((height, width), dtype=np.uint8)
         for rect in rects_world:
             pix = np.round(rect / res).astype(np.int32)
             cv2.fillConvexPoly(mask, pix, 100)
+        if extra_mask is not None:
+            mask = np.where((mask > 0) | (extra_mask > 0), 100, 0).astype(np.uint8)
         grid.data = mask.flatten().astype(np.int8).tolist()
         return grid
 
@@ -280,6 +331,13 @@ class CcLocalizationNode(Node):
         """Same metadata as the KOZ grid, but no cells occupied."""
         grid, width, height = self._new_grid_skeleton()
         grid.data = np.zeros(width * height, dtype=np.int8).tolist()
+        return grid
+
+    def build_block_grid(self, orange_grid_mask: np.ndarray) -> OccupancyGrid:
+        """Wrap a grid-resolution orange mask (0/255) into an OccupancyGrid (0/100)."""
+        grid, _, _ = self._new_grid_skeleton()
+        occ = np.where(orange_grid_mask > 0, 100, 0).astype(np.int8)
+        grid.data = occ.flatten().tolist()
         return grid
 
     def publish_stockpiles(self, stockpile_rects: dict[int, np.ndarray]) -> None:
@@ -334,6 +392,13 @@ class CcLocalizationNode(Node):
             t_w = self.last_t_w
         else:
             return
+
+        # Undistort once for both detection and projection so the pinhole model is exact.
+        undistorted = cv2.undistort(frame, self.mtx, self.dist)
+        orange_mask = self.detect_orange_mask(undistorted)
+        _, grid_w, grid_h = self._new_grid_skeleton()
+        H = image_to_grid_homography(R_cw, t_w, self.mtx, self.koz_resolution)
+        orange_grid_mask = cv2.warpPerspective(orange_mask, H, (grid_w, grid_h))
 
         # world -> camera: invert the outer PnP.
         transforms.append(self.make_transform(self.world_frame, self.camera_frame, R_cw, -R_cw @ t_w))
@@ -397,7 +462,8 @@ class CcLocalizationNode(Node):
                 transforms.append(self.make_transform(self.world_frame, f"aruco_{tid}", R_wt, t_wt))
 
         self.broadcaster.sendTransform(transforms)
-        self.koz_pub.publish(self.build_koz_grid(rects))
+        self.koz_pub.publish(self.build_koz_grid(rects, extra_mask=orange_grid_mask))
+        self.block_pub.publish(self.build_block_grid(orange_grid_mask))
         self.free_map_pub.publish(self.build_free_grid())
         self.publish_stockpiles(stockpile_rects)
 
