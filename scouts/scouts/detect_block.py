@@ -10,7 +10,7 @@ import cv2
 
 # from retriever_msgs.msg import PoseStatus
 
-from block_interfaces.msg import BlockPose
+from block_interfaces.msg import BlockPose, Block
 
 import message_filters
 
@@ -59,7 +59,8 @@ class DetectBlock(Node):
 
         # publishes the visible block poses to the central planner
         self.vis_pub = self.create_publisher(
-            BlockPose, f"{self.get_namespace()}/visible_block_pose", 10
+            # BlockPose, f"{self.get_namespace()}/scout_report", 10
+            Block, f"{self.get_namespace()}/scout_report", 10
         )
 
         # describe how a real camera converts 3D poitns into image pizels
@@ -223,20 +224,21 @@ class DetectBlock(Node):
                             candidate_pose_stamped.pose.position.z}')
                     
     
-                        candidate_block = BlockPose()
+                        candidate_block = Block()
                         # candidate_block.id = block_id # TODO make this the actual ID
-                        candidate_block.id = block_id # TODO make this the actual ID
+                        # candidate_block.id = block_id # TODO make this the actual ID
+                        candidate_block.type = Block.TYPE_B # TODO this is just an examples, need to change
 
                         candidate_block.pose_stamped = candidate_pose_stamped
     
                         # check to see if this is a duplicate block
-                        for found_block in self.found_blocks:   
-                            if found_block.id == candidate_block.id:
-                                # self.get_logger().info(f'Block {found_block.id} is a duplicate')
-                                continue
+                        # for found_block in self.found_blocks:   
+                        #     if found_block.id == candidate_block.id:
+                        #         # self.get_logger().info(f'Block {found_block.id} is a duplicate')
+                        #         continue
                         
-                        # this a new block
-                        self.found_blocks.append(candidate_block)
+                        # # this a new block
+                        # self.found_blocks.append(candidate_block)
                         
                         # publish the newly found block
                         self.vis_pub.publish(candidate_block) 
