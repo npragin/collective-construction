@@ -208,10 +208,10 @@ class DetectBlock(Node):
                         candidate_pose_stamped.pose.orientation.z = z
                         candidate_pose_stamped.pose.orientation.w = w
     
-                        # self.get_logger().info(f'Pose in frame_id baselink: { \
-                        #     candidate_pose_stamped.pose.position.x, \
-                        #     candidate_pose_stamped.pose.position.y, \
-                        #     candidate_pose_stamped.pose.position.z}')
+                        self.get_logger().info(f'Pose in frame_id baselink: { \
+                            candidate_pose_stamped.pose.position.x, \
+                            candidate_pose_stamped.pose.position.y, \
+                            candidate_pose_stamped.pose.position.z}')
     
                         
                         candidate_pose_stamped = self.tf_buffer.transform(
@@ -304,6 +304,7 @@ class DetectBlock(Node):
             marker.color.a = 1.0
             marker_array.markers.append(marker)
         self.marker_pub.publish(marker_array)
+
 
     # def segment_color(self, cv_image):
     #         # Convert the image to HSV color space for better color segmentation
