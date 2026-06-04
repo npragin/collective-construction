@@ -151,9 +151,9 @@ class CcLocalizationNode(Node):
         self.declare_parameter("inner_frame", "build")
         self.declare_parameter("camera_frame", "camera")
         self.declare_parameter("tick_rate_hz", 30.0)
-        self.declare_parameter("stockpile_ema_alpha", 0.3)
-        self.declare_parameter("orange_hsv_low", [5.0, 100.0, 100.0])
-        self.declare_parameter("orange_hsv_high", [25.0, 255.0, 255.0])
+        self.declare_parameter("stockpile_ema_alpha", 0.1)
+        self.declare_parameter("orange_hsv_low", [0.0, 128.0, 200.0])
+        self.declare_parameter("orange_hsv_high", [15.0, 255.0, 255.0])
         self.declare_parameter("orange_morph_kernel", 3)
 
         device_id = self.get_parameter("device_id").get_parameter_value().integer_value
