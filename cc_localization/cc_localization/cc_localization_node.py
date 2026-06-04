@@ -14,7 +14,7 @@ from ament_index_python.packages import get_package_share_directory
 from cc_interfaces.msg import Stockpiles
 
 import rclpy
-from geometry_msgs.msg import Point, Point32, Polygon, TransformStamped
+from geometry_msgs.msg import Point, Point32, Polygon, PolygonStamped, TransformStamped
 from nav_msgs.msg import OccupancyGrid
 from rclpy.node import Node
 from tf2_ros import TransformBroadcaster
@@ -54,6 +54,23 @@ def yaw_only(R: np.ndarray) -> np.ndarray:
     yaw = float(np.arctan2(R[1, 0], R[0, 0]))
     c, s = np.cos(yaw), np.sin(yaw)
     return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+
+
+def ema_step(
+    prev: tuple[np.ndarray, float] | None,
+    pos_xy: np.ndarray,
+    yaw: float,
+    alpha: float,
+) -> tuple[np.ndarray, float]:
+    """One EMA step on (xy position, yaw). Yaw is averaged via unit-vector mean."""
+    if prev is None:
+        return pos_xy, yaw
+    prev_pos, prev_yaw = prev
+    smoothed_pos = alpha * pos_xy + (1.0 - alpha) * prev_pos
+    cs = alpha * np.cos(yaw) + (1.0 - alpha) * np.cos(prev_yaw)
+    sn = alpha * np.sin(yaw) + (1.0 - alpha) * np.sin(prev_yaw)
+    smoothed_yaw = float(np.arctan2(sn, cs))
+    return smoothed_pos, smoothed_yaw
 
 
 def rect_in_world(R2: np.ndarray, t2: np.ndarray, length: float, width: float) -> np.ndarray:
@@ -112,6 +129,7 @@ class CcLocalizationNode(Node):
         self.declare_parameter("inner_frame", "build")
         self.declare_parameter("camera_frame", "camera")
         self.declare_parameter("tick_rate_hz", 30.0)
+        self.declare_parameter("stockpile_ema_alpha", 0.3)
 
         device_id = self.get_parameter("device_id").get_parameter_value().integer_value
         self.marker_size = self.get_parameter("marker_size").get_parameter_value().double_value
@@ -128,6 +146,9 @@ class CcLocalizationNode(Node):
         self.inner_frame = self.get_parameter("inner_frame").get_parameter_value().string_value
         self.camera_frame = self.get_parameter("camera_frame").get_parameter_value().string_value
         tick_rate_hz = self.get_parameter("tick_rate_hz").get_parameter_value().double_value
+        self.stockpile_ema_alpha = (
+            self.get_parameter("stockpile_ema_alpha").get_parameter_value().double_value
+        )
 
         self.outer_corners = corners_for(OUTER_TAG_IDS, world_length, world_width)
         self.inner_corners = corners_for(INNER_TAG_IDS, inner_length, inner_width)
@@ -152,8 +173,14 @@ class CcLocalizationNode(Node):
         self.broadcaster = TransformBroadcaster(self)
         self.marker_pub = self.create_publisher(MarkerArray, "workspace_markers", 1)
         self.koz_pub = self.create_publisher(OccupancyGrid, "koz_mask", 1)
+        self.free_map_pub = self.create_publisher(OccupancyGrid, "free_map", 1)
         self.stockpile_pub = self.create_publisher(Stockpiles, "stockpile_polygons", 1)
+        self.build_site_pub = self.create_publisher(PolygonStamped, "build_site_polygon", 1)
         self.timer = self.create_timer(1.0 / tick_rate_hz, self.tick)
+
+        self.last_R_cw: np.ndarray | None = None
+        self.last_t_w: np.ndarray | None = None
+        self.stockpile_ema: dict[int, tuple[np.ndarray, float]] = {}
 
     def destroy_node(self) -> None:
         """Release the camera before standard node teardown."""
@@ -222,16 +249,12 @@ class CcLocalizationNode(Node):
         m.points = [Point(x=x, y=y, z=0.0) for x, y in corners]
         return m
 
-    def build_koz_grid(self, rects_world: list[np.ndarray]) -> OccupancyGrid:
-        """Rasterize rotated rectangles (each Nx2 in world coords) into an OccupancyGrid."""
+    def _new_grid_skeleton(self) -> tuple[OccupancyGrid, int, int]:
+        """Build an OccupancyGrid with metadata set; caller fills `.data`."""
         wl, ww = self.outer_dims
         res = self.koz_resolution
         width = max(1, int(np.ceil(wl / res)))
         height = max(1, int(np.ceil(ww / res)))
-        mask = np.zeros((height, width), dtype=np.uint8)
-        for rect in rects_world:
-            pix = np.round(rect / res).astype(np.int32)
-            cv2.fillConvexPoly(mask, pix, 100)
 
         grid = OccupancyGrid()
         grid.header.stamp = self.get_clock().now().to_msg()
@@ -239,11 +262,24 @@ class CcLocalizationNode(Node):
         grid.info.resolution = float(res)
         grid.info.width = width
         grid.info.height = height
-        grid.info.origin.position.x = 0.0
-        grid.info.origin.position.y = 0.0
-        grid.info.origin.position.z = 0.0
         grid.info.origin.orientation.w = 1.0
+        return grid, width, height
+
+    def build_koz_grid(self, rects_world: list[np.ndarray]) -> OccupancyGrid:
+        """Rasterize rotated rectangles (each Nx2 in world coords) into an OccupancyGrid."""
+        grid, width, height = self._new_grid_skeleton()
+        res = self.koz_resolution
+        mask = np.zeros((height, width), dtype=np.uint8)
+        for rect in rects_world:
+            pix = np.round(rect / res).astype(np.int32)
+            cv2.fillConvexPoly(mask, pix, 100)
         grid.data = mask.flatten().astype(np.int8).tolist()
+        return grid
+
+    def build_free_grid(self) -> OccupancyGrid:
+        """Same metadata as the KOZ grid, but no cells occupied."""
+        grid, width, height = self._new_grid_skeleton()
+        grid.data = np.zeros(width * height, dtype=np.int8).tolist()
         return grid
 
     def publish_stockpiles(self, stockpile_rects: dict[int, np.ndarray]) -> None:
@@ -287,12 +323,17 @@ class CcLocalizationNode(Node):
         stockpile_ids: list[int] = []
         stockpile_rects: dict[int, np.ndarray] = {}
 
-        if not outer_ok:
+        if outer_ok:
+            R_wc = cv2.Rodrigues(rvec_w)[0]
+            R_cw = R_wc.T
+            t_w = tvec_w.flatten()
+            self.last_R_cw = R_cw
+            self.last_t_w = t_w
+        elif self.last_R_cw is not None and self.last_t_w is not None:
+            R_cw = self.last_R_cw
+            t_w = self.last_t_w
+        else:
             return
-
-        R_wc = cv2.Rodrigues(rvec_w)[0]
-        R_cw = R_wc.T
-        t_w = tvec_w.flatten()
 
         # world -> camera: invert the outer PnP.
         transforms.append(self.make_transform(self.world_frame, self.camera_frame, R_cw, -R_cw @ t_w))
@@ -303,7 +344,14 @@ class CcLocalizationNode(Node):
             t_wi = R_cw @ (tvec_i.flatten() - t_w)
             t_wi[2] = 0.0
             transforms.append(self.make_transform(self.world_frame, self.inner_frame, R_wi, t_wi))
-            rects.append(rect_in_world(R_wi[:2, :2], t_wi[:2], *self.inner_dims))
+            inner_rect = rect_in_world(R_wi[:2, :2], t_wi[:2], *self.inner_dims)
+            rects.append(inner_rect)
+
+            poly_msg = PolygonStamped()
+            poly_msg.header.stamp = self.get_clock().now().to_msg()
+            poly_msg.header.frame_id = self.world_frame
+            poly_msg.polygon.points = [Point32(x=float(x), y=float(y), z=0.0) for x, y in inner_rect]
+            self.build_site_pub.publish(poly_msg)
 
         # Per-tag PnP for everything that isn't a frame-defining outer/inner corner.
         sl, sw = self.stockpile_dims
@@ -325,8 +373,21 @@ class CcLocalizationNode(Node):
             t_wt = R_cw @ (tvec_t.flatten() - t_w)
             t_wt[2] = 0.0
             if tid in STOCKPILE_TAG_IDS:
-                # Shift origin from tag center to rectangle bottom-left.
+                # Shift origin from tag center to rectangle bottom-left, then smooth.
                 t_wt = t_wt - R_wt @ np.array([sl / 2.0, sw / 2.0, 0.0])
+                yaw_measured = float(np.arctan2(R_wt[1, 0], R_wt[0, 0]))
+                pos_measured = t_wt[:2].copy()
+                smoothed_pos, smoothed_yaw = ema_step(
+                    self.stockpile_ema.get(tid),
+                    pos_measured,
+                    yaw_measured,
+                    self.stockpile_ema_alpha,
+                )
+                self.stockpile_ema[tid] = (smoothed_pos, smoothed_yaw)
+                c, s = np.cos(smoothed_yaw), np.sin(smoothed_yaw)
+                R_wt = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+                t_wt = np.array([smoothed_pos[0], smoothed_pos[1], 0.0])
+
                 transforms.append(self.make_transform(self.world_frame, f"stockpile_{tid}", R_wt, t_wt))
                 stockpile_rect = rect_in_world(R_wt[:2, :2], t_wt[:2], sl, sw)
                 rects.append(stockpile_rect)
@@ -337,6 +398,7 @@ class CcLocalizationNode(Node):
 
         self.broadcaster.sendTransform(transforms)
         self.koz_pub.publish(self.build_koz_grid(rects))
+        self.free_map_pub.publish(self.build_free_grid())
         self.publish_stockpiles(stockpile_rects)
 
         markers = MarkerArray()
