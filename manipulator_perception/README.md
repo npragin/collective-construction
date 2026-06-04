@@ -24,7 +24,7 @@ ros2 run aruco_depth_ros2 aruco_depth_node --ros-args \
   -p world_frame:=base_link \
   -p publish_tf:=true \
   -p publish_rviz_markers:=false \
-  -p show_window:=true
+  -p show_window:=false
 ```
 
 ### Run launch file

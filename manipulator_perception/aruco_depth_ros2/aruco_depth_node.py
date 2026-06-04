@@ -701,22 +701,18 @@ class ArucoDepthNode(Node):
             )
             return None
 
-    def publish_aruco_tf(self, header, marker_id, x, y, z, quat):
+    def publish_aruco_tf(self, header, marker_id, dict_name, x, y, z, quat):
         transform = TransformStamped()
-
         transform.header.stamp = header.stamp
         transform.header.frame_id = header.frame_id
-        transform.child_frame_id = f"aruco_{dict_name}_{marker_id}"   # namespaced
-
+        transform.child_frame_id = f"aruco_{dict_name}_{marker_id}"
         transform.transform.translation.x = float(x)
         transform.transform.translation.y = float(y)
         transform.transform.translation.z = float(z)
-
         transform.transform.rotation.x = float(quat[0])
         transform.transform.rotation.y = float(quat[1])
         transform.transform.rotation.z = float(quat[2])
         transform.transform.rotation.w = float(quat[3])
-
         self.tf_broadcaster.sendTransform(transform)
 
     def draw_text(self, image, marker_id, center_x, center_y, depth_m, x, y, z):
