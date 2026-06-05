@@ -1,0 +1,9 @@
+string[] block_ids
+int32[] aruco_ids
+geometry_msgs/PoseStamped[] desired_poses
+---
+bool success
+string message
+string[] properly_placed_ids
+string[] misplaced_ids
+string[] unseen_ids

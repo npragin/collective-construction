@@ -1,0 +1,452 @@
+# Placement Accuracy Checker Robot Test Guide
+
+This guide explains how to test the placement accuracy checker on the Clearpath robot using a hardcoded planner input.
+
+The checker currently performs the following pipeline:
+
+```text
+Robot RGB-D camera
+    ↓
+AprilTag 16h5 detection inside placement_accuracy_checker.py
+    ↓
+Current block pose estimated in camera frame
+    ↓
+Pose transformed into target/world frame using TF
+    ↓
+Compared against hardcoded planner desired pose
+    ↓
+Returns good / misplaced / unseen
+```
+
+## Current Test Tag
+
+```text
+AprilTag family: 16h5
+Tag ID: 13
+Tag size: 55 mm = 0.055 m
+```
+
+## Important Notes
+
+The checker expects the planner’s desired pose and the transformed perceived pose to be in the same frame.
+
+For robot testing, the target frame should usually be either:
+
+```text
+world
+```
+
+or:
+
+```text
+odom
+```
+
+Use whichever frame the planner is using for desired block poses.
+
+If the robot TF tree does not contain `world`, use `odom` for the first test.
+
+---
+
+# 1. SSH into the robot
+
+From your laptop:
+
+```bash
+ssh robot@192.168.0.20
+```
+
+Then on the robot:
+
+```bash
+cd ~/aruco_ws
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+```
+
+---
+
+# 2. Get latest code and build
+
+```bash
+cd ~/aruco_ws/src/collective-construction
+
+git checkout placement-accuracy-checker
+git pull
+```
+
+Build the updated interfaces and checker:
+
+```bash
+cd ~/aruco_ws
+
+source /opt/ros/jazzy/setup.bash
+
+colcon build --packages-select cc_interfaces manipulator --symlink-install
+
+source install/setup.bash
+```
+
+Confirm the checker executable exists:
+
+```bash
+ros2 pkg executables manipulator | grep placement
+```
+
+Expected:
+
+```text
+manipulator placement_accuracy_checker
+```
+
+---
+
+# 3. Confirm camera topics
+
+Run:
+
+```bash
+cd ~/aruco_ws
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 topic list | grep -E "camera|color|depth|camera_info"
+```
+
+On the Clearpath robot, the camera topics may look like this:
+
+```text
+/j100_0897/sensors/camera_0/color/image
+/j100_0897/sensors/camera_0/depth/image
+/j100_0897/sensors/camera_0/color/camera_info
+```
+
+Or, if using RealSense-style topics, they may look like this:
+
+```text
+/camera/camera/color/image_raw
+/camera/camera/aligned_depth_to_color/image_raw
+/camera/camera/color/camera_info
+```
+
+Write down the correct topics before running the checker.
+
+---
+
+# 4. Confirm the camera frame
+
+Check the image frame:
+
+```bash
+ros2 topic echo /j100_0897/sensors/camera_0/color/image --once | grep frame_id
+```
+
+If using RealSense-style topics:
+
+```bash
+ros2 topic echo /camera/camera/color/image_raw --once | grep frame_id
+```
+
+The frame may be something like:
+
+```text
+camera_color_optical_frame
+```
+
+or another robot-specific camera frame.
+
+This frame will be used as the `fallback_source_frame` if the image message does not provide a frame.
+
+---
+
+# 5. Check TF connection
+
+Check whether the robot can transform from the planner/checker target frame to the camera frame.
+
+If the planner uses `world`:
+
+```bash
+ros2 run tf2_ros tf2_echo world <camera_frame>
+```
+
+Example:
+
+```bash
+ros2 run tf2_ros tf2_echo world camera_color_optical_frame
+```
+
+If that fails, try `odom`:
+
+```bash
+ros2 run tf2_ros tf2_echo odom <camera_frame>
+```
+
+Example:
+
+```bash
+ros2 run tf2_ros tf2_echo odom camera_color_optical_frame
+```
+
+If `odom` works but `world` does not, then run the checker with:
+
+```bash
+-p target_frame:=odom
+```
+
+If the planner must use `world`, then the system needs a valid transform such as:
+
+```text
+world → odom → base_link → camera
+```
+
+For a temporary robot test only, if `world` and `odom` are equivalent, this can be published:
+
+```bash
+ros2 run tf2_ros static_transform_publisher \
+  --x 0 --y 0 --z 0 \
+  --roll 0 --pitch 0 --yaw 0 \
+  --frame-id world \
+  --child-frame-id odom
+```
+
+Leave that running only if needed.
+
+---
+
+# 6. Run the placement checker
+
+## Option A — Clearpath camera topics
+
+Use this if the robot publishes Clearpath-style camera topics:
+
+```bash
+cd ~/aruco_ws
+
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 run manipulator placement_accuracy_checker --ros-args \
+  -p color_topic:=/j100_0897/sensors/camera_0/color/image \
+  -p depth_topic:=/j100_0897/sensors/camera_0/depth/image \
+  -p camera_info_topic:=/j100_0897/sensors/camera_0/color/camera_info \
+  -p tag_family:=16h5 \
+  -p target_id:=13 \
+  -p marker_size:=0.055 \
+  -p target_frame:=odom \
+  -p fallback_source_frame:=camera_color_optical_frame \
+  -p enable_correction:=false \
+  -p theta_tolerance_deg:=180.0
+```
+
+## Option B — RealSense-style topics
+
+Use this if the robot publishes RealSense-style camera topics:
+
+```bash
+cd ~/aruco_ws
+
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 run manipulator placement_accuracy_checker --ros-args \
+  -p color_topic:=/camera/camera/color/image_raw \
+  -p depth_topic:=/camera/camera/aligned_depth_to_color/image_raw \
+  -p camera_info_topic:=/camera/camera/color/camera_info \
+  -p tag_family:=16h5 \
+  -p target_id:=13 \
+  -p marker_size:=0.055 \
+  -p target_frame:=odom \
+  -p fallback_source_frame:=camera_color_optical_frame \
+  -p enable_correction:=false \
+  -p theta_tolerance_deg:=180.0
+```
+
+Leave the checker running.
+
+Expected log when the tag is visible:
+
+```text
+Tag ID 13 perceived.
+Camera pose: x=..., y=..., z=...
+World pose: x=..., y=..., z=...
+```
+
+The log may say “World pose,” but the actual frame is whatever `target_frame` is set to, for example `odom`.
+
+---
+
+# 7. View the debug image
+
+If running with a GUI:
+
+```bash
+cd ~/aruco_ws
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 run rqt_image_view rqt_image_view /placement_checker/debug_image
+```
+
+If SSH-only, view this from a laptop connected to the same ROS network.
+
+The debug image should show AprilTag ID `13` when the tag is visible.
+
+---
+
+# 8. Hardcoded planner service call
+
+Since the planner is not calling the checker yet, we manually send the planner input through the service.
+
+Always refresh the terminal before calling the service:
+
+```bash
+cd ~/aruco_ws
+
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 daemon stop
+ros2 daemon start
+```
+
+Check the service:
+
+```bash
+ros2 service list | grep placement
+ros2 service type /placement_checker/check_placement
+```
+
+Expected:
+
+```text
+/placement_checker/check_placement
+cc_interfaces/srv/CheckPlacement
+```
+
+---
+
+# 9. Test A — Unseen block
+
+Move the tag out of camera view, then call:
+
+```bash
+ros2 service call /placement_checker/check_placement cc_interfaces/srv/CheckPlacement "{block_ids: ['block_13'], aruco_ids: [13], desired_poses: [{header: {frame_id: 'odom'}, pose: {position: {x: 0.0, y: 0.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}]}"
+```
+
+Expected:
+
+```text
+unseen=['block_13']
+```
+
+If using `world` as the checker target frame, change:
+
+```text
+frame_id: 'odom'
+```
+
+to:
+
+```text
+frame_id: 'world'
+```
+
+---
+
+# 10. Test B — Seen but misplaced
+
+Put the tag in view, then call:
+
+```bash
+ros2 service call /placement_checker/check_placement cc_interfaces/srv/CheckPlacement "{block_ids: ['block_13'], aruco_ids: [13], desired_poses: [{header: {frame_id: 'odom'}, pose: {position: {x: 0.5, y: 0.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}]}"
+```
+
+Expected:
+
+```text
+misplaced=['block_13']
+```
+
+This intentionally sets the desired pose far away.
+
+---
+
+# 11. Test C — Properly placed
+
+Look at the placement checker terminal and copy the current transformed pose printed in the logs:
+
+```text
+World pose: x=..., y=..., z=...
+```
+
+Use those values in the service call.
+
+Example only:
+
+```bash
+ros2 service call /placement_checker/check_placement cc_interfaces/srv/CheckPlacement "{block_ids: ['block_13'], aruco_ids: [13], desired_poses: [{header: {frame_id: 'odom'}, pose: {position: {x: -0.033, y: 0.115, z: 0.470}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}]}"
+```
+
+Expected:
+
+```text
+good=['block_13']
+```
+
+---
+
+# 12. RViz check
+
+Start RViz:
+
+```bash
+rviz2
+```
+
+Set:
+
+```text
+Fixed Frame: odom
+```
+
+or:
+
+```text
+Fixed Frame: world
+```
+
+depending on the checker `target_frame`.
+
+Add these displays:
+
+```text
+TF
+/placement_checker/marker_array
+/placement_checker/debug_image
+```
+
+The checker marker array should show green for properly placed and red for misplaced.
+
+---
+
+# Expected Test Results
+
+| Test                                  | Expected Result          |
+| ------------------------------------- | ------------------------ |
+| Tag out of view                       | `unseen=['block_13']`    |
+| Tag visible but desired pose far away | `misplaced=['block_13']` |
+| Desired pose matches perceived pose   | `good=['block_13']`      |
+
+---
+
+# Current Safety Setting
+
+Correction is disabled during this test:
+
+```bash
+-p enable_correction:=false
+```
+
+So the checker will only report the result. It will not command the arm or gripper.
+
+Enable correction only after the perception, TF, and hardcoded checker tests are confirmed.

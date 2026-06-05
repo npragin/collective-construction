@@ -29,9 +29,12 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'rgb_aruco_test = manipulator.rgb_aruco_test:main',
             'absolute_move = manipulator.absolute_move:main',
             'pick = manipulator.pick:main',
             'fsm = manipulator.fsm:main',
+            'correction_task_server = manipulator.correction_task_server:main',
+            'placement_accuracy_checker = manipulator.placement_accuracy_checker:main',
             'test_fsm = manipulator.test_fsm:main',
         ],
     },
