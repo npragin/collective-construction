@@ -7,10 +7,7 @@
   <maintainer email="jar3dnorth@gmail.com">jn2-alt</maintainer>
   <license>Apache-2.0</license>
 
-  <exec_depend>rclpy</exec_depend>
-  <exec_depend>cc_interfaces</exec_depend>
   <exec_depend>nav2_msgs</exec_depend>
-  <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>action_msgs</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
