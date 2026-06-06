@@ -46,14 +46,14 @@ links:
   cylinder:
   - name: cylinder
     parent: default_mount
-    xyz: [-0.0254, 0.0, 0.04445]
+    xyz: [0.1016, 0.0, 0.04445]
     rpy: [0.0, 0.0, 0.0]
     radius: 0.05
     length: 0.0889
   box:
   - name: box
     parent: default_mount
-    xyz: [0.1135, 0.0, 0.09525]
+    xyz: [-0.1651, 0.0, 0.09525]
     rpy: [0.0, 0.0, 0.0]
     size: [0.1778, 0.4318, 0.1905]
 mounts:
@@ -144,11 +144,11 @@ sensors:
         tf_ned_to_enu: true
 manipulators:
   moveit: 
-    enable: false
+    enable: true
   arms:
     - model: kinova_gen3_lite
       parent: default_mount
-      xyz: [-0.0254, 0.0, 0.0889]
+      xyz: [0.1016, 0.0, 0.0889]
       rpy: [0.0, 0.0, 0.0]
       ip: 192.168.1.10
       port: 10000

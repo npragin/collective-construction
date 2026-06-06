@@ -36,6 +36,7 @@ setup(
             'correction_task_server = manipulator.correction_task_server:main',
             'placement_accuracy_checker = manipulator.placement_accuracy_checker:main',
             'test_fsm = manipulator.test_fsm:main',
+            'manipulation_server = manipulator.manipulation_server:main',
         ],
     },
 )

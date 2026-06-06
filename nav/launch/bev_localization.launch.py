@@ -89,6 +89,22 @@ def generate_launch_description():
                     LaunchConfiguration('marker_offset_yaw'), value_type=float),
             }],
         ),
+
+        # Relay the camera's world->build onto the robot /tf so robot-side
+        # nodes can transform build against the arm. NO tf remap here: it
+        # subscribes to the global /tf (absolute) and broadcasts to the
+        # namespaced /tf (relative).
+        Node(
+            package='nav',
+            executable='tf_relay',
+            name='tf_relay',
+            output='screen',
+            parameters=[{
+                'use_sim_time': use_sim_time,
+                'frames': ['build'],
+                'robot_namespace': namespace,
+            }],
+        ),
     ])
 
     return LaunchDescription(ARGUMENTS + [group])

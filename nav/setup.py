@@ -31,6 +31,7 @@ setup(
         'console_scripts': [
             'waypoint_follower = nav.waypoint_follower_simple:main',
             'bev_pose_bridge = nav.bev_pose_bridge:main',
+            'tf_relay = nav.tf_relay:main',
         ],
     },
 )
