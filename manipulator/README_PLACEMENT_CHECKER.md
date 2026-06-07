@@ -27,13 +27,7 @@ From your laptop:
 ssh robot@192.168.0.20
 ```
 
-Example:
 
-```bash
-ssh robot@192.168.0.20
-```
-
-Then source the robot workspace:
 
 ```bash
 cd ~/ws/rob599
