@@ -22,6 +22,7 @@ find_package(rclcpp_components REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/AbsoluteMove.action"
   "action/TransportBlock.action"
+  "srv/DetectMarkers.srv"
   DEPENDENCIES geometry_msgs
 )
 

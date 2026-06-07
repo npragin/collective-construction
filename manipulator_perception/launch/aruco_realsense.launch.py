@@ -19,6 +19,14 @@ def setup_launch_arguments(context, *args, **kwargs):
         executable="aruco_depth_node",
         name="aruco_depth_node",
         output="screen",
+        # This robot publishes TF on the namespaced /j100_0897/tf(_static)
+        # topics. Remap so the node's TransformListener (and broadcaster) use
+        # them instead of the empty global /tf; otherwise every lookup fails
+        # with "frame does not exist".
+        remappings=[
+            ("/tf", "/j100_0897/tf"),
+            ("/tf_static", "/j100_0897/tf_static"),
+        ],
         parameters=[
             {
                 "color_topic": "/j100_0897/sensors/camera_0/color/image",

@@ -1,0 +1,12 @@
+# Request
+int32 target_id   # marker id to detect; -1 = return all detected markers
+---
+# Response
+bool success                              # true if a frame was available and processed
+string message                           # human-readable summary
+int32[] ids                              # detected marker ids (filtered by target_id)
+string[] dictionaries                    # source ArUco dictionary per marker (parallel to ids)
+float64[] depths                         # measured depth [m] per marker, 0.0 if PnP fallback (parallel to ids)
+geometry_msgs/PoseStamped[] poses_camera # pose per marker in the camera optical frame (parallel to ids)
+geometry_msgs/PoseStamped[] poses_arm    # pose per marker in arm_base_frame; empty frame_id if TF unavailable (parallel to ids)
+geometry_msgs/PoseStamped[] poses_world  # pose per marker in world_frame; empty frame_id if TF unavailable (parallel to ids)

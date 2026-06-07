@@ -39,6 +39,8 @@ from cv_bridge import CvBridge
 from tf2_geometry_msgs import do_transform_pose_stamped, do_transform_point
 from tf2_ros import Buffer, TransformBroadcaster, TransformException, TransformListener
 
+from manipulator_interface.srv import DetectMarkers
+
 class OpenCVArucoCompat:
     """
     Compatibility adapter for OpenCV ArUco, now supporting multiple
@@ -297,6 +299,7 @@ class ArucoDepthNode(Node):
 
         self.bridge = CvBridge()
 
+        self.latest_color_msg = None
         self.latest_depth_image = None
         self.latest_depth_encoding = None
 
@@ -387,7 +390,18 @@ class ArucoDepthNode(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        self.get_logger().info("ArUco depth ROS 2 node started.")
+        # Detection runs on demand via this service instead of every frame, so
+        # the node no longer continuously publishes/logs. Subscriptions stay up
+        # only to cache the most recent color/depth frame for the next call.
+        self.detect_srv = self.create_service(
+            DetectMarkers,
+            "/aruco/detect_markers",
+            self.handle_detect_markers
+        )
+
+        self.get_logger().info("ArUco depth ROS 2 node started (on-demand service mode).")
+        self.get_logger().info("Detect service: /aruco/detect_markers "
+                               "(request.target_id = -1 for all)")
         self.get_logger().info(f"RGB topic: {self.color_topic}")
         self.get_logger().info(f"Depth topic: {self.depth_topic}")
         self.get_logger().info(f"Camera info topic: {self.camera_info_topic}")
@@ -532,31 +546,53 @@ class ArucoDepthNode(Node):
         )
 
     def color_callback(self, msg):
-        self.get_logger().debug("Received color image, processing for ArUco detection...")
+        # Only cache the latest frame here; detection happens on service request.
+        self.latest_color_msg = msg
+
+    def handle_detect_markers(self, request, response):
         if self.camera_matrix is None:
-            self.get_logger().warn("Waiting for camera_info...")
-            return
+            response.success = False
+            response.message = "No camera_info received yet."
+            return response
 
-        if self.latest_depth_image is None:
-            self.get_logger().warn("Waiting for depth image...")
-            return
+        if self.latest_color_msg is None:
+            response.success = False
+            response.message = "No color image received yet."
+            return response
 
         try:
-            color_image = self.bridge.imgmsg_to_cv2(
-                msg,
-                desired_encoding="bgr8"
-            )
+            result = self.run_detection(self.latest_color_msg, int(request.target_id))
         except Exception as exc:
-            self.get_logger().error(f"RGB image conversion failed: {exc}")
-            return
+            self.get_logger().error(f"Detection failed: {exc}")
+            response.success = False
+            response.message = f"Detection failed: {exc}"
+            return response
 
+        response.success = True
+        response.ids = result["ids"]
+        response.dictionaries = result["dictionaries"]
+        response.depths = result["depths"]
+        response.poses_camera = result["poses_camera"]
+        response.poses_arm = result["poses_arm"]
+        response.poses_world = result["poses_world"]
+        response.message = f"Detected {len(result['ids'])} marker(s): {result['ids']}"
+        return response
+
+    def run_detection(self, msg, target_id):
+        """
+        Run ArUco detection on a single color frame, publish the results once,
+        and return per-marker results as parallel lists keyed by detection order.
+        """
+        ids_out = []
+        dicts_out = []
+        depths_out = []
+        poses_cam_out = []
+        poses_arm_out = []
+        poses_world_out = []
+
+        color_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
         gray_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
-
-        try:
-            corners, ids, marker_dicts = self.aruco_backend.detect_markers(gray_image)
-        except Exception as exc:
-            self.get_logger().error(f"ArUco detection failed: {exc}")
-            return
+        corners, ids, marker_dicts = self.aruco_backend.detect_markers(gray_image)
 
         pose_array_msg = PoseArray()
         pose_array_msg.header = msg.header
@@ -579,7 +615,7 @@ class ArucoDepthNode(Node):
                 marker_id = int(marker_id_np)
                 dict_name = marker_dicts[i]
 
-                if self.target_id != -1 and marker_id != self.target_id:
+                if target_id != -1 and marker_id != target_id:
                     continue
 
                 marker_corners = corners[i]
@@ -670,15 +706,15 @@ class ArucoDepthNode(Node):
                     f"Frame: {msg.header.frame_id}"
                 )
 
-                if arm_pose is not None:
-                    self.get_logger().info(
-                        f"Marker ID: {marker_id} | "
-                        f"Arm-frame pose: "
-                        f"x={arm_pose.pose.position.x:.3f}, "
-                        f"y={arm_pose.pose.position.y:.3f}, "
-                        f"z={arm_pose.pose.position.z:.3f} m | "
-                        f"Frame: {arm_pose.header.frame_id}"
-                    )
+                # Collect parallel per-marker results for the service response.
+                # Missing arm/world transforms are returned as an empty
+                # PoseStamped (frame_id == "") so the arrays stay aligned.
+                ids_out.append(marker_id)
+                dicts_out.append(dict_name)
+                depths_out.append(float(depth_m))
+                poses_cam_out.append(pose_msg)
+                poses_arm_out.append(arm_pose if arm_pose is not None else PoseStamped())
+                poses_world_out.append(world_pose if world_pose is not None else PoseStamped())
 
         self.pose_array_pub.publish(pose_array_msg)
         self.pose_array_arm_pub.publish(pose_array_arm_msg)
@@ -703,6 +739,15 @@ class ArucoDepthNode(Node):
             # Keep this false on Linux if your OpenCV GUI backend is unstable.
             cv2.imshow("ROS 2 ArUco Depth Detection", color_image)
             cv2.waitKey(1)
+
+        return {
+            "ids": ids_out,
+            "dictionaries": dicts_out,
+            "depths": depths_out,
+            "poses_camera": poses_cam_out,
+            "poses_arm": poses_arm_out,
+            "poses_world": poses_world_out,
+        }
 
     def estimate_marker_pose(self, marker_corners):
         half_size = self.marker_size / 2.0
