@@ -16,11 +16,13 @@ from action_msgs.msg import GoalStatus
 from manipulator_interface.action import TransportBlock
 from manipulator_interface.action import AbsoluteMove
 from control_msgs.action import GripperCommand
+from manipulator_interface.srv import DetectMarkers
 
 class State(Enum):
 
     IDLE = auto()
     NAVIGATE_TO_PICKUP = auto()
+    DETECT_BLOCK = auto()
     PICK_BLOCK = auto()
     NAVIGATE_TO_DROPOFF = auto()
     PLACE_BLOCK = auto()
@@ -143,12 +145,16 @@ class RobotFSM(Node):
         self.get_logger().info(f"Using manipulator namespace: {self.manipulator_namespace}")
 
 
-        self.navigator = BasicNavigator(namespace=self.namespace)
-        self.get_logger().info('Waiting for Nav2...')
-        self.navigator.waitUntilNav2Active(localizer="bt_navigator")
+        # self.navigator = BasicNavigator(namespace=self.namespace)
+        # self.get_logger().info('Waiting for Nav2...')
+        # self.navigator.waitUntilNav2Active(localizer="bt_navigator")
 
-        self.nav_to_pose_client = ActionClient(self, NavigateToPose, f'/{self.namespace}/navigate_to_pose')
-        self.nav_to_pose_client.wait_for_server()
+        # self.nav_to_pose_client = ActionClient(self, NavigateToPose, f'/{self.namespace}/navigate_to_pose')
+        # self.nav_to_pose_client.wait_for_server()
+
+        self.block_detection = self.create_client(DetectMarkers, '/aruco/detect_markers')
+        while not self.block_detection.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('service not available, waiting again...')
 
         self.manipulator = Manipulator(self, namespace=self.manipulator_namespace)
         self.state = State.IDLE
@@ -158,6 +164,51 @@ class RobotFSM(Node):
 
         self.x_offset = 0.0 #meters
         self.y_offset = 0.0 #meters
+
+    async def detect_blocks(self):
+        block_request = DetectMarkers.Request()
+        block_request.target_id = -1
+
+        # A service call_async future resolves directly to the response;
+        # there is no goal-handle / get_result_async (those are for actions).
+        result = await self.block_detection.call_async(block_request)
+
+        if not result.success:
+            self.get_logger().error(f'Block detection failed: {result.message}')
+            return None
+
+        # Keep only markers that resolved to a valid arm-frame pose
+        # (empty frame_id means the TF lookup failed for that marker).
+        arm_poses = [p for p in result.poses_arm if p.header.frame_id]
+
+        if not arm_poses:
+            self.get_logger().error('No blocks with a valid arm-frame pose detected')
+            return None
+
+        self.get_logger().info(
+            f'Detected {len(arm_poses)} block(s); ids={list(result.ids)}'
+        )
+        return arm_poses
+
+        
+
+        # goal_future = self.absolute_move_client.send_goal_async(goal_msg)
+        # goal_handle = await goal_future
+
+        # if not goal_handle.accepted:
+        #     self.node.get_logger().error('Arm goal rejected')
+        #     return False
+
+        # result_future = goal_handle.get_result_async()
+        # result = await result_future
+
+        # if result.status == 4:
+        #     self.node.get_logger().info('Arm motion succeeded')
+        #     return True
+
+        # self.node.get_logger().error('Arm motion failed')
+
+        # return False
 
     def offset_pose(self, pose, dx=0.0, dy=0.0):
         new_pose = copy.deepcopy(pose)
@@ -201,39 +252,45 @@ class RobotFSM(Node):
 
     async def execute_mission(self, pickup_pose, dropoff_pose):
 
-        # navigating to the block
+        # # navigating to the block
 
-        self.state = State.NAVIGATE_TO_PICKUP
-        success = await self.navigate_to_pose(pickup_pose)
-        self.get_logger().info(f'Arrived at pickup location: {success}')
-        if not success:
+        # self.state = State.NAVIGATE_TO_PICKUP
+        # success = await self.navigate_to_pose(pickup_pose)
+        # self.get_logger().info(f'Arrived at pickup location: {success}')
+        # if not success:
+        #     return False
+        
+        
+        # Detect block
+        self.state = State.DETECT_BLOCK
+        arm_poses = await self.detect_blocks()
+
+        if not arm_poses:
             return False
-        
-        
-        # picking up the block
 
+        # picking up the block (use the first detected block's arm-frame pose)
         self.state = State.PICK_BLOCK
-        success = await self.pick_block()
+        success = await self.pick_block(arm_poses[0])
 
         if not success:
             return False
 
-        # navigate to drop off
+        # # navigate to drop off
 
-        self.state = State.NAVIGATE_TO_DROPOFF
-        dropoff_offset = self.offset_pose(dropoff_pose, self.x_offset, self.y_offset)
-        success = await self.navigate_to_pose(dropoff_offset)
+        # self.state = State.NAVIGATE_TO_DROPOFF
+        # dropoff_offset = self.offset_pose(dropoff_pose, self.x_offset, self.y_offset)
+        # success = await self.navigate_to_pose(dropoff_offset)
 
-        if not success:
-            return False
+        # if not success:
+        #     return False
 
         # place block
 
         self.state = State.PLACE_BLOCK
-        success = await self.place_block()
+        success = await self.place_block(dropoff_pose)
 
-        if not success:
-            return False
+        # if not success:
+        #     return False
 
         self.state = State.COMPLETE
         self.get_logger().info('Mission completed successfully')
@@ -263,7 +320,7 @@ class RobotFSM(Node):
 
         return False
 
-    async def pick_block(self):
+    async def pick_block(self, pick_pose):
 
         self.get_logger().info('Starting pick sequence')
 
@@ -274,10 +331,20 @@ class RobotFSM(Node):
         if not success:
             return False
 
-        # move to pick pose
+        # move to the detected block pose (arm_0_base_link frame, gripper down)
+        pick_pose_above = copy.deepcopy(pick_pose)
+        pick_pose_above.pose.position.z = 0.0
 
-        pick_pose = self.manipulator.make_posestamped(self.manipulator.pick_pose)
-        success = await self.manipulator.move_to_pose(pick_pose)
+        success = await self.manipulator.move_to_pose(pick_pose_above)
+
+        if not success:
+            return False
+        
+        # move to the detected block pose (arm_0_base_link frame, gripper down)
+        pick_pose_grasp = copy.deepcopy(pick_pose)
+        pick_pose_grasp.pose.position.z = -0.12
+
+        success = await self.manipulator.move_to_pose(pick_pose_grasp)
 
         if not success:
             return False
@@ -296,14 +363,23 @@ class RobotFSM(Node):
 
         return success
 
-    async def place_block(self):
+    async def place_block(self, place_pose):
 
         self.get_logger().info('Starting place sequence')
 
         # place block
 
-        place_pose = self.manipulator.make_posestamped(self.manipulator.place_pose)
-        success = await self.manipulator.move_to_pose(place_pose)
+        place_pose_above = copy.deepcopy(place_pose)
+        place_pose_above.pose.position.z = 0.0
+        success = await self.manipulator.move_to_pose(place_pose_above)
+
+        if not success:
+            return False
+
+
+        place_pose_drop = copy.deepcopy(place_pose)
+        place_pose_drop.pose.position.z = -0.09
+        success = await self.manipulator.move_to_pose(place_pose_drop)
 
         if not success:
             return False
