@@ -31,12 +31,12 @@ from rclpy.qos import qos_profile_sensor_data
 from rclpy.duration import Duration
 
 from sensor_msgs.msg import Image, CameraInfo
-from geometry_msgs.msg import PoseStamped, PoseArray, TransformStamped
+from geometry_msgs.msg import PoseStamped, PoseArray, TransformStamped, PointStamped
 from visualization_msgs.msg import Marker, MarkerArray
 from std_msgs.msg import Int32MultiArray
 
 from cv_bridge import CvBridge
-from tf2_geometry_msgs import do_transform_pose_stamped
+from tf2_geometry_msgs import do_transform_pose_stamped, do_transform_point
 from tf2_ros import Buffer, TransformBroadcaster, TransformException, TransformListener
 
 class OpenCVArucoCompat:
@@ -259,6 +259,9 @@ class ArucoDepthNode(Node):
         self.declare_parameter("color_topic", "/j100_0897/sensors/camera_0/color/image")
         self.declare_parameter("depth_topic", "/j100_0897/sensors/camera_0/depth/image")
         self.declare_parameter("camera_info_topic", "/j100_0897/sensors/camera_0/color/camera_info")
+        # Depth is NOT aligned to color on this camera (no aligned_depth_to_color
+        # stream). We register it ourselves, which needs the depth intrinsics.
+        self.declare_parameter("depth_camera_info_topic", "/j100_0897/sensors/camera_0/depth/camera_info")
 
         self.declare_parameter("marker_size", 0.0495)
         self.declare_parameter("aruco_dictionary", "25h9")
@@ -277,6 +280,7 @@ class ArucoDepthNode(Node):
         self.color_topic = self.get_parameter("color_topic").value
         self.depth_topic = self.get_parameter("depth_topic").value
         self.camera_info_topic = self.get_parameter("camera_info_topic").value
+        self.depth_camera_info_topic = self.get_parameter("depth_camera_info_topic").value
 
         self.marker_size = float(self.get_parameter("marker_size").value)
         self.aruco_dictionary_name = self.get_parameter("aruco_dictionary").value
@@ -298,6 +302,11 @@ class ArucoDepthNode(Node):
 
         self.camera_matrix = None
         self.dist_coeffs = None
+
+        # Depth camera intrinsics + optical frame, used to register the
+        # (unaligned) depth image against the color detection.
+        self.depth_camera_matrix = None
+        self.depth_frame_id = None
 
         self.aruco_backend = OpenCVArucoCompat(
             dictionary_name=self.aruco_dictionary_name,
@@ -322,6 +331,13 @@ class ArucoDepthNode(Node):
             CameraInfo,
             self.camera_info_topic,
             self.camera_info_callback,
+            qos_profile_sensor_data
+        )
+
+        self.depth_camera_info_sub = self.create_subscription(
+            CameraInfo,
+            self.depth_camera_info_topic,
+            self.depth_camera_info_callback,
             qos_profile_sensor_data
         )
 
@@ -375,6 +391,7 @@ class ArucoDepthNode(Node):
         self.get_logger().info(f"RGB topic: {self.color_topic}")
         self.get_logger().info(f"Depth topic: {self.depth_topic}")
         self.get_logger().info(f"Camera info topic: {self.camera_info_topic}")
+        self.get_logger().info(f"Depth camera info topic: {self.depth_camera_info_topic}")
         self.get_logger().info(f"Marker size: {self.marker_size} m")
         self.get_logger().info(f"Dictionary: {self.aruco_dictionary_name}")
         self.get_logger().info(f"Target ID: {self.target_id} (-1 means all markers)")
@@ -392,6 +409,12 @@ class ArucoDepthNode(Node):
         else:
             self.dist_coeffs = np.zeros((5,), dtype=np.float64)
 
+    def depth_camera_info_callback(self, msg):
+        self.depth_camera_matrix = np.array(msg.k, dtype=np.float64).reshape(3, 3)
+        # The depth image lives in its own optical frame; we need its id to
+        # look up the color -> depth transform when registering depth.
+        self.depth_frame_id = msg.header.frame_id
+
     def depth_callback(self, msg):
         try:
             self.latest_depth_image = self.bridge.imgmsg_to_cv2(
@@ -407,6 +430,106 @@ class ArucoDepthNode(Node):
         fx, fy = self.camera_matrix[0, 0], self.camera_matrix[1, 1]
         cx, cy = self.camera_matrix[0, 2], self.camera_matrix[1, 2]
         return (u - cx) * depth_m / fx, (v - cy) * depth_m / fy, depth_m
+
+    def sample_marker_depth(self, tvec_color, color_frame_id):
+        """
+        Register the solvePnP marker position into the unaligned depth image,
+        sample depth there, and return the refined position in the color frame.
+
+        The depth stream is not aligned to color on this camera, so the depth
+        and color sensors have different intrinsics and a physical baseline.
+        Reusing the color marker pixel to index the depth image therefore reads
+        the wrong location. Instead we transform the PnP position into the depth
+        optical frame, project it with the depth intrinsics to find the matching
+        depth pixel, sample there, then transform the result back to color.
+
+        Returns:
+            (depth_m, (x, y, z)) on success, where depth_m is the measured range
+            and (x, y, z) is in `color_frame_id`. (0.0, None) if depth could not
+            be sampled, in which case the caller keeps the PnP estimate.
+        """
+        if (self.latest_depth_image is None
+                or self.depth_camera_matrix is None
+                or self.depth_frame_id is None):
+            return 0.0, None
+
+        p = tvec_color.flatten()
+
+        point_color = PointStamped()
+        point_color.header.frame_id = color_frame_id
+        point_color.point.x = float(p[0])
+        point_color.point.y = float(p[1])
+        point_color.point.z = float(p[2])
+
+        # color optical frame -> depth optical frame
+        try:
+            tf_c2d = self.tf_buffer.lookup_transform(
+                self.depth_frame_id,
+                color_frame_id,
+                rclpy.time.Time(),
+                timeout=Duration(seconds=0.2)
+            )
+        except TransformException as exc:
+            self.get_logger().warn(
+                f"No transform '{color_frame_id}' -> '{self.depth_frame_id}' "
+                f"for depth registration: {exc}"
+            )
+            return 0.0, None
+
+        point_depth = do_transform_point(point_color, tf_c2d)
+        if point_depth.point.z <= 0.0:
+            return 0.0, None
+
+        # Project into the depth image using the depth intrinsics.
+        fx = self.depth_camera_matrix[0, 0]
+        fy = self.depth_camera_matrix[1, 1]
+        cx = self.depth_camera_matrix[0, 2]
+        cy = self.depth_camera_matrix[1, 2]
+
+        u = int(round(fx * point_depth.point.x / point_depth.point.z + cx))
+        v = int(round(fy * point_depth.point.y / point_depth.point.z + cy))
+
+        depth_m = self.get_depth_at_pixel(
+            self.latest_depth_image,
+            self.latest_depth_encoding,
+            u,
+            v,
+            window_size=5
+        )
+        if depth_m <= 0.0:
+            return 0.0, None
+
+        # Backproject the measured depth in the depth frame ...
+        xd = (u - cx) * depth_m / fx
+        yd = (v - cy) * depth_m / fy
+
+        refined_depth = PointStamped()
+        refined_depth.header.frame_id = self.depth_frame_id
+        refined_depth.point.x = float(xd)
+        refined_depth.point.y = float(yd)
+        refined_depth.point.z = float(depth_m)
+
+        # ... and bring it back into the color frame for publishing.
+        try:
+            tf_d2c = self.tf_buffer.lookup_transform(
+                color_frame_id,
+                self.depth_frame_id,
+                rclpy.time.Time(),
+                timeout=Duration(seconds=0.2)
+            )
+        except TransformException as exc:
+            self.get_logger().warn(
+                f"No transform '{self.depth_frame_id}' -> '{color_frame_id}' "
+                f"for depth registration: {exc}"
+            )
+            return depth_m, None
+
+        refined_color = do_transform_point(refined_depth, tf_d2c)
+        return depth_m, (
+            refined_color.point.x,
+            refined_color.point.y,
+            refined_color.point.z,
+        )
 
     def color_callback(self, msg):
         self.get_logger().debug("Received color image, processing for ArUco detection...")
@@ -468,19 +591,20 @@ class ArucoDepthNode(Node):
 
                 x, y, z = tvec.flatten()
 
+                # Color-image marker center, used only for the debug overlay.
                 center_x, center_y = self.get_marker_center(marker_corners)
 
-                depth_m = self.get_depth_at_pixel(
-                    self.latest_depth_image,
-                    self.latest_depth_encoding,
-                    center_x,
-                    center_y,
-                    window_size=5
+                # Depth is not aligned to color on this camera, so the color
+                # marker pixel does not map to the same depth pixel. Register
+                # the PnP position into the depth image instead of reusing the
+                # color pixel, then refine in the color frame.
+                depth_m, depth_point = self.sample_marker_depth(
+                    tvec, msg.header.frame_id
                 )
 
                 # Prefer depth-measured position; keep PnP only as fallback.
-                if depth_m > 0.0:
-                    x, y, z = self.backproject(center_x, center_y, depth_m)
+                if depth_m > 0.0 and depth_point is not None:
+                    x, y, z = depth_point
 
                 self.aruco_backend.draw_axes(
                     color_image,
