@@ -149,7 +149,7 @@ World pose: x=..., y=..., z=...
 If using SSH, connect with X forwarding:
 
 ```bash
-ssh -Y robot@<robot_ip>
+ssh -Y robot@192.168.0.20
 ```
 
 Then run:
