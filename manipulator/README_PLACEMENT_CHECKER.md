@@ -18,58 +18,6 @@ Compared against planner desired pose
 Returns good / misplaced / unseen
 ```
 
-## Current Tested Setup
-
-Robot namespace:
-
-```text
-/j100_0897
-```
-
-Test tag:
-
-```text
-AprilTag family: 16h5
-Tag ID: 13
-Tag size: 55 mm = 0.055 m
-```
-
-Robot camera topics:
-
-```text
-Color image:
-  /j100_0897/sensors/camera_0/color/image
-
-Depth image:
-  /j100_0897/sensors/camera_0/depth/image
-
-Camera info:
-  /j100_0897/sensors/camera_0/depth/camera_info
-```
-
-Robot TF topics:
-
-```text
-Dynamic TF:
-  /j100_0897/tf
-
-Static TF:
-  /j100_0897/tf_static
-```
-
-Target frame:
-
-```text
-world
-```
-
-Camera frame:
-
-```text
-camera_0_color_optical_frame
-```
-
----
 
 ## 1. SSH into the Robot
 
