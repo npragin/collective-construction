@@ -18,6 +18,7 @@ This keeps OpenCV-version-specific logic inside OpenCVArucoCompat.
 """
 
 import sys
+import time
 import faulthandler
 
 faulthandler.enable(file=sys.stderr, all_threads=True)
@@ -29,6 +30,8 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.duration import Duration
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
 
 from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import PoseStamped, PoseArray, TransformStamped, PointStamped
@@ -279,6 +282,11 @@ class ArucoDepthNode(Node):
         self.declare_parameter("arm_base_frame", "arm_0_base_link")
         self.declare_parameter("world_frame", "base_link")
 
+        # A service call collects this many frames, rejects outliers, and
+        # averages them. sample_timeout bounds how long it waits for them.
+        self.declare_parameter("num_samples", 10)
+        self.declare_parameter("sample_timeout", 5.0)
+
         self.color_topic = self.get_parameter("color_topic").value
         self.depth_topic = self.get_parameter("depth_topic").value
         self.camera_info_topic = self.get_parameter("camera_info_topic").value
@@ -296,6 +304,9 @@ class ArucoDepthNode(Node):
 
         self.arm_base_frame = self.get_parameter("arm_base_frame").value
         self.world_frame = self.get_parameter("world_frame").value
+
+        self.num_samples = int(self.get_parameter("num_samples").value)
+        self.sample_timeout = float(self.get_parameter("sample_timeout").value)
 
         self.bridge = CvBridge()
 
@@ -393,10 +404,14 @@ class ArucoDepthNode(Node):
         # Detection runs on demand via this service instead of every frame, so
         # the node no longer continuously publishes/logs. Subscriptions stay up
         # only to cache the most recent color/depth frame for the next call.
+        # Own callback group so the service can keep sampling while the camera
+        # subscription callbacks (in the default group) keep caching new frames
+        # under a MultiThreadedExecutor.
         self.detect_srv = self.create_service(
             DetectMarkers,
             "/aruco/detect_markers",
-            self.handle_detect_markers
+            self.handle_detect_markers,
+            callback_group=MutuallyExclusiveCallbackGroup()
         )
 
         self.get_logger().info("ArUco depth ROS 2 node started (on-demand service mode).")
@@ -560,28 +575,187 @@ class ArucoDepthNode(Node):
             response.message = "No color image received yet."
             return response
 
-        try:
-            result = self.run_detection(self.latest_color_msg, int(request.target_id))
-        except Exception as exc:
-            self.get_logger().error(f"Detection failed: {exc}")
+        target_id = int(request.target_id)
+
+        # Collect several readings from distinct frames, then reject outliers
+        # and average to suppress per-frame noise.
+        samples = []
+        last_stamp = None
+        deadline = time.monotonic() + self.sample_timeout
+        while len(samples) < self.num_samples and time.monotonic() < deadline:
+            msg = self.latest_color_msg
+            stamp = (msg.header.stamp.sec, msg.header.stamp.nanosec)
+            if stamp == last_stamp:
+                time.sleep(0.005)   # wait for a fresh frame
+                continue
+            last_stamp = stamp
+            try:
+                samples.append(self.run_detection(msg, target_id, publish=False))
+            except Exception as exc:
+                self.get_logger().error(f"Detection failed: {exc}")
+
+        if not samples:
             response.success = False
-            response.message = f"Detection failed: {exc}"
+            response.message = "No frames processed within timeout."
             return response
 
+        agg = self.aggregate_samples(samples)
+        self.publish_aggregated(agg)
+
         response.success = True
-        response.ids = result["ids"]
-        response.dictionaries = result["dictionaries"]
-        response.depths = result["depths"]
-        response.poses_camera = result["poses_camera"]
-        response.poses_arm = result["poses_arm"]
-        response.poses_world = result["poses_world"]
-        response.message = f"Detected {len(result['ids'])} marker(s): {result['ids']}"
+        response.ids = agg["ids"]
+        response.dictionaries = agg["dictionaries"]
+        response.depths = agg["depths"]
+        response.poses_camera = agg["poses_camera"]
+        response.poses_arm = agg["poses_arm"]
+        response.poses_world = agg["poses_world"]
+        response.message = (
+            f"Averaged {len(samples)} reading(s); "
+            f"detected {len(agg['ids'])} marker(s): {agg['ids']}"
+        )
         return response
 
-    def run_detection(self, msg, target_id):
+    def aggregate_samples(self, samples):
         """
-        Run ArUco detection on a single color frame, publish the results once,
-        and return per-marker results as parallel lists keyed by detection order.
+        Group per-frame detections by marker id, then for each marker reject
+        outlier readings and average the survivors. Returns the same dict shape
+        as run_detection.
+        """
+        by_id = {}
+        order = []
+        for s in samples:
+            for i, mid in enumerate(s["ids"]):
+                if mid not in by_id:
+                    by_id[mid] = {"dict": s["dictionaries"][i],
+                                  "cam": [], "arm": [], "world": [], "depth": []}
+                    order.append(mid)
+                e = by_id[mid]
+                e["dict"] = s["dictionaries"][i]
+                e["cam"].append(s["poses_camera"][i])
+                e["arm"].append(s["poses_arm"][i])
+                e["world"].append(s["poses_world"][i])
+                e["depth"].append(s["depths"][i])
+
+        agg = {"ids": [], "dictionaries": [], "depths": [],
+               "poses_camera": [], "poses_arm": [], "poses_world": []}
+        for mid in order:
+            e = by_id[mid]
+            agg["ids"].append(mid)
+            agg["dictionaries"].append(e["dict"])
+            agg["depths"].append(self._robust_mean_depth(e["depth"]))
+            agg["poses_camera"].append(self._aggregate_poses(e["cam"]))
+            agg["poses_arm"].append(self._aggregate_poses(e["arm"]))
+            agg["poses_world"].append(self._aggregate_poses(e["world"]))
+        return agg
+
+    def _outlier_mask(self, values):
+        """Boolean keep-mask using the MAD-based modified z-score (|z| <= 3.5)."""
+        v = np.asarray(values, dtype=np.float64)
+        if len(v) <= 2:
+            return np.ones(len(v), dtype=bool)
+        med = np.median(v)
+        mad = np.median(np.abs(v - med))
+        if mad < 1e-12:
+            return np.ones(len(v), dtype=bool)
+        modified_z = 0.6745 * (v - med) / mad
+        return np.abs(modified_z) <= 3.5
+
+    def _robust_mean_depth(self, depths):
+        v = np.asarray([d for d in depths if d > 0.0], dtype=np.float64)
+        if len(v) == 0:
+            return 0.0
+        keep = self._outlier_mask(v)
+        return float(np.mean(v[keep]))
+
+    def _aggregate_poses(self, pose_list):
+        # Keep only readings whose transform was available (frame_id set).
+        valid = [p for p in pose_list if p.header.frame_id]
+        if not valid:
+            return PoseStamped()
+
+        positions = np.array(
+            [[p.pose.position.x, p.pose.position.y, p.pose.position.z] for p in valid]
+        )
+        quats = np.array(
+            [[p.pose.orientation.x, p.pose.orientation.y,
+              p.pose.orientation.z, p.pose.orientation.w] for p in valid]
+        )
+
+        # Reject position outliers by distance to the median, then average the
+        # survivors' positions and orientations.
+        med = np.median(positions, axis=0)
+        dists = np.linalg.norm(positions - med, axis=1)
+        keep = self._outlier_mask(dists)
+        if not np.any(keep):
+            keep = np.ones(len(valid), dtype=bool)
+
+        avg_pos = positions[keep].mean(axis=0)
+        avg_quat = self._average_quaternions(quats[keep])
+
+        out = PoseStamped()
+        out.header.frame_id = valid[-1].header.frame_id
+        out.header.stamp = valid[-1].header.stamp
+        out.pose.position.x = float(avg_pos[0])
+        out.pose.position.y = float(avg_pos[1])
+        out.pose.position.z = float(avg_pos[2])
+        out.pose.orientation.x = float(avg_quat[0])
+        out.pose.orientation.y = float(avg_quat[1])
+        out.pose.orientation.z = float(avg_quat[2])
+        out.pose.orientation.w = float(avg_quat[3])
+        return out
+
+    def _average_quaternions(self, quats):
+        quats = np.asarray(quats, dtype=np.float64)
+        ref = quats[0]
+        # Flip to the same hemisphere as the reference before linear averaging.
+        signs = np.sign(quats @ ref)
+        signs[signs == 0] = 1.0
+        aligned = quats * signs[:, None]
+        mean = aligned.mean(axis=0)
+        norm = np.linalg.norm(mean)
+        if norm < 1e-9:
+            return ref
+        return mean / norm
+
+    def publish_aggregated(self, agg):
+        cam_arr = PoseArray()
+        arm_arr = PoseArray()
+        arm_arr.header.frame_id = self.arm_base_frame
+        world_arr = PoseArray()
+        world_arr.header.frame_id = self.world_frame
+        ids_msg = Int32MultiArray()
+
+        for i, mid in enumerate(agg["ids"]):
+            cam = agg["poses_camera"][i]
+            if cam.header.frame_id:
+                cam_arr.header = cam.header
+                cam_arr.poses.append(cam.pose)
+                ids_msg.data.append(mid)
+                self.pose_pub.publish(cam)
+                if self.publish_tf_enabled:
+                    q = cam.pose.orientation
+                    self.publish_aruco_tf(
+                        cam.header, mid, agg["dictionaries"][i],
+                        cam.pose.position.x, cam.pose.position.y, cam.pose.position.z,
+                        [q.x, q.y, q.z, q.w]
+                    )
+            arm = agg["poses_arm"][i]
+            if arm.header.frame_id:
+                arm_arr.poses.append(arm.pose)
+            world = agg["poses_world"][i]
+            if world.header.frame_id:
+                world_arr.poses.append(world.pose)
+
+        self.pose_array_pub.publish(cam_arr)
+        self.pose_array_arm_pub.publish(arm_arr)
+        self.pose_array_world_pub.publish(world_arr)
+        self.marker_ids_pub.publish(ids_msg)
+
+    def run_detection(self, msg, target_id, publish=True):
+        """
+        Run ArUco detection on a single color frame and return per-marker results
+        as parallel lists. When publish is True the results are also published on
+        the /aruco/* topics and TF; during multi-sample averaging it is False.
         """
         ids_out = []
         dicts_out = []
@@ -665,7 +839,8 @@ class ArucoDepthNode(Node):
                 pose_msg.pose.orientation.z = float(quat[2])
                 pose_msg.pose.orientation.w = float(quat[3])
 
-                self.pose_pub.publish(pose_msg)
+                if publish:
+                    self.pose_pub.publish(pose_msg)
                 pose_array_msg.poses.append(pose_msg.pose)
                 marker_ids_msg.data.append(marker_id)
 
@@ -681,7 +856,7 @@ class ArucoDepthNode(Node):
                 if world_pose is not None:
                     pose_array_world_msg.poses.append(world_pose.pose)
 
-                if self.publish_tf_enabled:
+                if publish and self.publish_tf_enabled:
                     self.publish_aruco_tf(
                         msg.header, marker_id, dict_name, x, y, z, quat
                     )
@@ -703,12 +878,13 @@ class ArucoDepthNode(Node):
                     z
                 )
 
-                self.get_logger().info(
-                    f"Marker ID: {marker_id} | "
-                    f"Depth: {depth_m:.3f} m | "
-                    f"Camera-frame pose: x={x:.3f}, y={y:.3f}, z={z:.3f} m | "
-                    f"Frame: {msg.header.frame_id}"
-                )
+                if publish:
+                    self.get_logger().info(
+                        f"Marker ID: {marker_id} | "
+                        f"Depth: {depth_m:.3f} m | "
+                        f"Camera-frame pose: x={x:.3f}, y={y:.3f}, z={z:.3f} m | "
+                        f"Frame: {msg.header.frame_id}"
+                    )
 
                 # Collect parallel per-marker results for the service response.
                 # Missing arm/world transforms are returned as an empty
@@ -720,29 +896,30 @@ class ArucoDepthNode(Node):
                 poses_arm_out.append(arm_pose if arm_pose is not None else PoseStamped())
                 poses_world_out.append(world_pose if world_pose is not None else PoseStamped())
 
-        self.pose_array_pub.publish(pose_array_msg)
-        self.pose_array_arm_pub.publish(pose_array_arm_msg)
-        self.pose_array_world_pub.publish(pose_array_world_msg)
-        self.marker_ids_pub.publish(marker_ids_msg)
+        if publish:
+            self.pose_array_pub.publish(pose_array_msg)
+            self.pose_array_arm_pub.publish(pose_array_arm_msg)
+            self.pose_array_world_pub.publish(pose_array_world_msg)
+            self.marker_ids_pub.publish(marker_ids_msg)
 
-        if self.publish_rviz_markers_enabled:
-            self.marker_array_pub.publish(marker_array_msg)
+            if self.publish_rviz_markers_enabled:
+                self.marker_array_pub.publish(marker_array_msg)
 
-        try:
-            debug_msg = self.bridge.cv2_to_imgmsg(
-                color_image,
-                encoding="bgr8"
-            )
-            debug_msg.header = msg.header
-            self.debug_image_pub.publish(debug_msg)
+            try:
+                debug_msg = self.bridge.cv2_to_imgmsg(
+                    color_image,
+                    encoding="bgr8"
+                )
+                debug_msg.header = msg.header
+                self.debug_image_pub.publish(debug_msg)
 
-        except Exception as exc:
-            self.get_logger().error(f"Debug image publish failed: {exc}")
+            except Exception as exc:
+                self.get_logger().error(f"Debug image publish failed: {exc}")
 
-        if self.show_window:
-            # Keep this false on Linux if your OpenCV GUI backend is unstable.
-            cv2.imshow("ROS 2 ArUco Depth Detection", color_image)
-            cv2.waitKey(1)
+            if self.show_window:
+                # Keep this false on Linux if your OpenCV GUI backend is unstable.
+                cv2.imshow("ROS 2 ArUco Depth Detection", color_image)
+                cv2.waitKey(1)
 
         return {
             "ids": ids_out,
@@ -971,7 +1148,11 @@ def main(args=None):
 
     try:
         node = ArucoDepthNode()
-        rclpy.spin(node)
+        # Multi-threaded so the detect service can sample frames while the
+        # camera subscriptions keep caching new ones.
+        executor = MultiThreadedExecutor()
+        executor.add_node(node)
+        executor.spin()
 
     except KeyboardInterrupt:
         pass

@@ -53,6 +53,8 @@ def generate_launch_description():
                 "arm_base_frame": "arm_0_base_link",
                 "world_frame": "world",
                 "show_window": False,
+                "num_samples": 10,                                                                                      
+                "sample_timeout": 5.0,   
             }
         ],
     )

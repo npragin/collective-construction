@@ -40,6 +40,8 @@ def setup_launch_arguments(context, *args, **kwargs):
                 "publish_rviz_markers": False,
                 "arm_base_frame": "arm_0_base_link",
                 "world_frame": "base_link",
+                "num_samples": 10,
+                "sample_timeout": 5.0,
                 "show_window": False,
             }
         ],
