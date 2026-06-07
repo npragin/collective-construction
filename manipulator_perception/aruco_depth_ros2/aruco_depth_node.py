@@ -671,6 +671,10 @@ class ArucoDepthNode(Node):
 
                 arm_pose = self.transform_pose(pose_msg, self.arm_base_frame)
                 if arm_pose is not None:
+                    # Roll the orientation by pi about its own x-axis so the
+                    # gripper approach points down instead of up.
+                    o = arm_pose.pose.orientation
+                    o.x, o.y, o.z, o.w = o.w, o.z, -o.y, -o.x
                     pose_array_arm_msg.poses.append(arm_pose.pose)
 
                 world_pose = self.transform_pose(pose_msg, self.world_frame)
