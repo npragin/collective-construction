@@ -389,8 +389,8 @@ class AbsoluteMoveNode(Node):
 
         #planning params
         #set planning params
-        motion_request.max_velocity_scaling_factor = 0.2
-        motion_request.max_acceleration_scaling_factor = 0.1
+        motion_request.max_velocity_scaling_factor = 0.5
+        motion_request.max_acceleration_scaling_factor = 0.4
         motion_request.allowed_planning_time = 2.0
         motion_request.num_planning_attempts = 10
 

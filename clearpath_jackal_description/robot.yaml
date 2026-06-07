@@ -78,7 +78,7 @@ sensors:
     launch_enabled: true
     parent: front_fender_mount
     xyz: [0.0455, 0.0, -0.05]
-    rpy: [3.1415, -0.8988, 0.0]
+    rpy: [3.1415, -0.785398, 0.0]
     ros_parameters:
       intel_realsense:
         camera_name: camera_0
@@ -154,7 +154,7 @@ manipulators:
   arms:
     - model: kinova_gen3_lite
       parent: default_mount
-      xyz: [0.085, 0.0, 0.0889]
+      xyz: [0.085, 0.0, 0.09144]
       rpy: [0.0, 0.0, 0.0]
       ip: 192.168.1.10
       port: 10000
