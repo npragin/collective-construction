@@ -67,7 +67,7 @@ def generate_launch_description():
         replacements={'<robot_namespace>': ('/', namespace)},
         condition=IfCondition(use_namespace),
     )
-
+    print('getting past here?')
     configured_params = ParameterFile(
         RewrittenYaml(
             source_file=params_file,
