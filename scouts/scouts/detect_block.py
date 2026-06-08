@@ -232,8 +232,9 @@ class DetectBlock(Node):
     
                         # check to see if this is a duplicate block
                         duplicate = False
-                        for _, found_id in self.found_blocks:   
+                        for found_block, found_id in self.found_blocks:   
                             if found_id == candidate_block_id:
+                                found_block.pose = candidate_pose_stamped
                                 self.get_logger().info(f'Block {candidate_block_id} is a duplicate')
                                 duplicate = True
 
