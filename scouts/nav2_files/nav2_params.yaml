@@ -58,8 +58,9 @@ amcl:
 bt_navigator:
   ros__parameters:
     global_frame: world
-    robot_base_frame: <namespace>/base_link
-    odom_topic: <namespace>/odom
+    # robot_base_frame: <namespace>/base_link
+    robot_base_frame: sierra/base_link
+    odom_topic: sierra/odom
     bt_loop_duration: 10
     default_server_timeout: 20
     wait_for_service_timeout: 1000
@@ -210,8 +211,8 @@ local_costmap:
     ros__parameters:
       update_frequency: 5.0
       publish_frequency: 2.0
-      global_frame: <namespace>/odom
-      robot_base_frame: <namespace>/base_link
+      global_frame: sierra/odom
+      robot_base_frame: sierra/base_link
       rolling_window: true
       # size of local cost map is 3m x 3m
       width: 3
@@ -259,8 +260,8 @@ global_costmap:
     ros__parameters:
       update_frequency: 1.0
       publish_frequency: 1.0
-      global_frame: <namespace>/map
-      robot_base_frame: <namespace>/base_link
+      global_frame: sierra/map
+      robot_base_frame: sierra/base_link
       robot_radius: 0.22
       resolution: 0.05
       track_unknown_space: true
@@ -352,9 +353,9 @@ behavior_server:
       plugin: "nav2_behaviors::Wait"
     assisted_teleop:
       plugin: "nav2_behaviors::AssistedTeleop"
-    local_frame: <namespace>/odom
-    global_frame: <namespace>/map
-    robot_base_frame: <namespace>/base_link
+    local_frame: sierra/odom
+    global_frame: sierra/map
+    robot_base_frame: sierra/base_link
     transform_tolerance: 0.1
     simulate_ahead_time: 2.0
     max_rotational_vel: 1.0
