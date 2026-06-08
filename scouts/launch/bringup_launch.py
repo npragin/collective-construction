@@ -37,8 +37,6 @@ def generate_launch_description():
     bringup_dir = get_package_share_directory('nav2_bringup')
     launch_dir = os.path.join(bringup_dir, 'launch')
 
-
-
     # Create the launch configuration variables
     namespace = LaunchConfiguration('namespace')
     use_namespace = LaunchConfiguration('use_namespace')
@@ -64,16 +62,12 @@ def generate_launch_description():
     # '<robot_namespace>' keyword shall be replaced by 'namespace' launch argument
     # in config file 'nav2_multirobot_params.yaml' as a default & example.
     # User defined config file should contain '<robot_namespace>' keyword for the replacements.
-    # 
-    # ros2 launch your_package bringup_launch.py namespace:=scout1 use_namespace:=True
     params_file = ReplaceString(
         source_file=params_file,
-        # replacements={'<robot_namespace>': ('/', namespace)},
-        replacements={'<namespace>': ('', namespace)},
-        condition=IfCondition(use_namespace), # if use_namespace:=True during launch command
+        replacements={'<robot_namespace>': ('/', namespace)},
+        condition=IfCondition(use_namespace),
     )
 
-    # if a robot namespace if given, replace all the '<robot_namespace>' vars in nav2 yaml with the argument. 
     configured_params = ParameterFile(
         RewrittenYaml(
             source_file=params_file,
@@ -84,7 +78,6 @@ def generate_launch_description():
         allow_substs=True,
     )
 
-    # something to do with logs
     stdout_linebuf_envvar = SetEnvironmentVariable(
         'RCUTILS_LOGGING_BUFFERED_STREAM', '1'
     )
@@ -103,40 +96,33 @@ def generate_launch_description():
         'slam', default_value='False', description='Whether run a SLAM'
     )
 
-    # if map is known, this is how you pass it to the map server (prodcues /map) which global costmap subs too
     declare_map_yaml_cmd = DeclareLaunchArgument(
         'map', default_value='', description='Full path to map yaml file to load'
     )
 
-    # if true -> AMCL or similar produces /map->/odom
     declare_use_localization_cmd = DeclareLaunchArgument(
         'use_localization', default_value='True',
         description='Whether to enable localization or not'
     )
 
-    # if on simulation set true
     declare_use_sim_time_cmd = DeclareLaunchArgument(
         'use_sim_time',
         default_value='false',
         description='Use simulation (Gazebo) clock if true',
     )
 
-    # nav2 params file allows the user to control and paramrtarize nav2.
     declare_params_file_cmd = DeclareLaunchArgument(
         'params_file',
         default_value=os.path.join(bringup_dir, 'params', 'nav2_params.yaml'),
         description='Full path to the ROS2 parameters file to use for all launched nodes',
     )
 
-    # if true (most often case), then lifecycle manager automatically activate all nav2 lifecycle nodes during startup.
-    # if false, user must manually start these up
     declare_autostart_cmd = DeclareLaunchArgument(
         'autostart',
         default_value='true',
         description='Automatically startup the nav2 stack',
     )
 
-    # if true, multiple nodes are loaded into a single container proceess
     declare_use_composition_cmd = DeclareLaunchArgument(
         'use_composition',
         default_value='True',
@@ -156,7 +142,6 @@ def generate_launch_description():
     # Specify the actions
     bringup_cmd_group = GroupAction(
         [
-            # if using namespace
             PushROSNamespace(condition=IfCondition(use_namespace), namespace=namespace),
             Node(
                 condition=IfCondition(use_composition),
@@ -168,9 +153,6 @@ def generate_launch_description():
                 remappings=remappings,
                 output='screen',
             ),
-            
-            # IncludeLaunchDescription launches another launch file
-            # if were doing slamp and its localizing (creating map->odom)
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     os.path.join(launch_dir, 'slam_launch.py')
@@ -184,8 +166,6 @@ def generate_launch_description():
                     'params_file': params_file,
                 }.items(),
             ),
-
-            # if we're not using slam and just doing localizing (creating map->odom)
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     os.path.join(launch_dir, 'localization_launch.py')
@@ -202,13 +182,9 @@ def generate_launch_description():
                     'container_name': 'nav2_container',
                 }.items(),
             ),
-
-            # start up navigation.
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     os.path.join(launch_dir, 'navigation_launch.py')
-                    # TODO I hard coded this in
-                    # '/home/liam-bouffard/Desktop/multiple_robot_systems/collective-construction/collective-construction/scouts/launch/navigation_launch.py'
                 ),
                 launch_arguments={
                     'namespace': namespace,
