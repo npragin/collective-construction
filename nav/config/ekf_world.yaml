@@ -9,7 +9,7 @@
 # two give a single connected tree: world -> odom -> base_link.
 /**:
   ros__parameters:
-    use_sim_time: true
+    use_sim_time: false
     frequency: 20.0
     sensor_timeout: 0.2
     two_d_mode: true

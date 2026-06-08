@@ -6,8 +6,13 @@ import copy
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionServer, ActionClient
+from rclpy.task import Future
 
 from geometry_msgs.msg import PoseStamped
+
+from rclpy.duration import Duration
+from tf2_ros import Buffer, TransformListener, TransformException
+import tf2_geometry_msgs  # noqa: F401  registers PoseStamped for tf_buffer.transform
 
 from nav2_simple_commander.robot_navigator import BasicNavigator
 from nav2_msgs.action import NavigateToPose
@@ -145,12 +150,12 @@ class RobotFSM(Node):
         self.get_logger().info(f"Using manipulator namespace: {self.manipulator_namespace}")
 
 
-        # self.navigator = BasicNavigator(namespace=self.namespace)
-        # self.get_logger().info('Waiting for Nav2...')
-        # self.navigator.waitUntilNav2Active(localizer="bt_navigator")
+        self.navigator = BasicNavigator(namespace=self.namespace)
+        self.get_logger().info('Waiting for Nav2...')
+        self.navigator.waitUntilNav2Active(localizer="bt_navigator")
 
-        # self.nav_to_pose_client = ActionClient(self, NavigateToPose, f'/{self.namespace}/navigate_to_pose')
-        # self.nav_to_pose_client.wait_for_server()
+        self.nav_to_pose_client = ActionClient(self, NavigateToPose, f'/{self.namespace}/navigate_to_pose')
+        self.nav_to_pose_client.wait_for_server()
 
         self.block_detection = self.create_client(DetectMarkers, '/aruco/detect_markers')
         while not self.block_detection.wait_for_service(timeout_sec=1.0):
@@ -159,56 +164,60 @@ class RobotFSM(Node):
         self.manipulator = Manipulator(self, namespace=self.manipulator_namespace)
         self.state = State.IDLE
 
+        # TF, used to convert dropoff poses from the world frame into the arm base frame.
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+
         self.action_server = ActionServer(self,TransportBlock,'transport_block',execute_callback=self.execute_callback)
         self.get_logger().info('Robot FSM Ready')
 
-        self.x_offset = 0.0 #meters
+        self.x_offset = -0.485 #meters
         self.y_offset = 0.0 #meters
 
     async def detect_blocks(self):
-        block_request = DetectMarkers.Request()
-        block_request.target_id = -1
+        attempts = 3   # initial try + 2 retries
+        for attempt in range(attempts):
+            block_request = DetectMarkers.Request()
+            block_request.target_id = -1
 
-        # A service call_async future resolves directly to the response;
-        # there is no goal-handle / get_result_async (those are for actions).
-        result = await self.block_detection.call_async(block_request)
+            # A service call_async future resolves directly to the response;
+            # there is no goal-handle / get_result_async (those are for actions).
+            result = await self.block_detection.call_async(block_request)
 
-        if not result.success:
-            self.get_logger().error(f'Block detection failed: {result.message}')
-            return None
+            if result.success:
+                # Keep only markers that resolved to a valid arm-frame pose
+                # (empty frame_id means the TF lookup failed for that marker).
+                arm_poses = [p for p in result.poses_arm if p.header.frame_id]
+                if arm_poses:
+                    self.get_logger().info(
+                        f'Detected {len(arm_poses)} block(s); ids={list(result.ids)}'
+                    )
+                    return arm_poses
+                self.get_logger().warn('No blocks with a valid arm-frame pose detected')
+            else:
+                self.get_logger().error(f'Block detection failed: {result.message}')
 
-        # Keep only markers that resolved to a valid arm-frame pose
-        # (empty frame_id means the TF lookup failed for that marker).
-        arm_poses = [p for p in result.poses_arm if p.header.frame_id]
+            if attempt < attempts - 1:
+                self.get_logger().info(
+                    f'No block detected; retrying in 5 s '
+                    f'(attempt {attempt + 2}/{attempts})'
+                )
+                await self._sleep(5.0)
 
-        if not arm_poses:
-            self.get_logger().error('No blocks with a valid arm-frame pose detected')
-            return None
+        self.get_logger().error(f'No block detected after {attempts} attempts')
+        return None
 
-        self.get_logger().info(
-            f'Detected {len(arm_poses)} block(s); ids={list(result.ids)}'
+    async def _sleep(self, seconds):
+        # Cooperative sleep: lets the rclpy executor keep spinning while waiting
+        # (asyncio.sleep would not be driven under rclpy.spin).
+        future = Future()
+        timer = self.create_timer(
+            seconds, lambda: future.done() or future.set_result(None)
         )
-        return arm_poses
-
-        
-
-        # goal_future = self.absolute_move_client.send_goal_async(goal_msg)
-        # goal_handle = await goal_future
-
-        # if not goal_handle.accepted:
-        #     self.node.get_logger().error('Arm goal rejected')
-        #     return False
-
-        # result_future = goal_handle.get_result_async()
-        # result = await result_future
-
-        # if result.status == 4:
-        #     self.node.get_logger().info('Arm motion succeeded')
-        #     return True
-
-        # self.node.get_logger().error('Arm motion failed')
-
-        # return False
+        try:
+            await future
+        finally:
+            self.destroy_timer(timer)
 
     def offset_pose(self, pose, dx=0.0, dy=0.0):
         new_pose = copy.deepcopy(pose)
@@ -252,13 +261,15 @@ class RobotFSM(Node):
 
     async def execute_mission(self, pickup_pose, dropoff_pose):
 
-        # # navigating to the block
+        # navigating to the block
 
-        # self.state = State.NAVIGATE_TO_PICKUP
-        # success = await self.navigate_to_pose(pickup_pose)
-        # self.get_logger().info(f'Arrived at pickup location: {success}')
-        # if not success:
-        #     return False
+        self.state = State.NAVIGATE_TO_PICKUP
+        pickup_offset = self.offset_pose(pickup_pose, self.x_offset, self.y_offset)
+
+        success = await self.navigate_to_pose(pickup_offset)
+        self.get_logger().info(f'Arrived at pickup location: {success}')
+        if not success:
+            return False
         
         
         # Detect block
@@ -277,12 +288,12 @@ class RobotFSM(Node):
 
         # # navigate to drop off
 
-        # self.state = State.NAVIGATE_TO_DROPOFF
-        # dropoff_offset = self.offset_pose(dropoff_pose, self.x_offset, self.y_offset)
-        # success = await self.navigate_to_pose(dropoff_offset)
+        self.state = State.NAVIGATE_TO_DROPOFF
+        dropoff_offset = self.offset_pose(dropoff_pose, self.x_offset, self.y_offset)
+        success = await self.navigate_to_pose(dropoff_offset)
 
-        # if not success:
-        #     return False
+        if not success:
+            return False
 
         # place block
 
@@ -366,6 +377,22 @@ class RobotFSM(Node):
     async def place_block(self, place_pose):
 
         self.get_logger().info('Starting place sequence')
+
+        # dropoff_pose arrives in the world frame; convert it to the arm base
+        # frame before sending to the manipulator (which plans in arm_0_base_link).
+        try:
+            place_pose = self.tf_buffer.transform(
+                place_pose,
+                self.manipulator.reference_frame,
+                timeout=Duration(seconds=1.0)
+            )
+        except TransformException as exc:
+            self.get_logger().error(
+                f"Could not transform dropoff pose from "
+                f"'{place_pose.header.frame_id}' to "
+                f"'{self.manipulator.reference_frame}': {exc}"
+            )
+            return False
 
         # place block
 

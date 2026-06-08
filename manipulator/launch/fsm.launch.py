@@ -32,6 +32,10 @@ def generate_launch_description():
         executable='fsm',
         name='fsm',
         output='screen',
+        remappings=[
+            ("/tf", "/j100_0897/tf"),
+            ("/tf_static", "/j100_0897/tf_static"),
+        ],
         parameters=[{
             'namespace': LaunchConfiguration('namespace'),
             'manipulator_namespace': LaunchConfiguration('manipulator_namespace'),
