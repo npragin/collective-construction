@@ -367,6 +367,15 @@ class RobotFSM(Node):
         if not success:
             return False
 
+        pick_pose_lift = copy.deepcopy(pick_pose)
+        pick_pose_lift.pose.position.z = 0.0
+
+        success = await self.manipulator.move_to_pose(pick_pose_lift)
+
+        if not success:
+            return False
+
+
         # stow the arm
 
         stow_pose = self.manipulator.make_posestamped(self.manipulator.stow_pose)
@@ -381,6 +390,8 @@ class RobotFSM(Node):
         # dropoff_pose arrives in the world frame; convert it to the arm base
         # frame before sending to the manipulator (which plans in arm_0_base_link).
         try:
+            place_pose.header.stamp.sec = 0
+            place_pose.header.stamp.nanosec = 0
             place_pose = self.tf_buffer.transform(
                 place_pose,
                 self.manipulator.reference_frame,
@@ -393,6 +404,21 @@ class RobotFSM(Node):
                 f"'{self.manipulator.reference_frame}': {exc}"
             )
             return False
+
+        # Clip the place target into the arm's reachable box (in place).
+        px = place_pose.pose.position.x
+        py = place_pose.pose.position.y
+        place_pose.pose.position.x = min(max(px, 0.35), 0.45)
+        place_pose.pose.position.y = min(max(py, -0.05), 0.05)
+        if (place_pose.pose.position.x, place_pose.pose.position.y) != (px, py):
+            self.get_logger().warn(
+                f'Clipped place target ({px:.3f}, {py:.3f}) -> '
+                f'({place_pose.pose.position.x:.3f}, '
+                f'{place_pose.pose.position.y:.3f})')
+
+        # Remap the orientation
+        o = place_pose.pose.orientation
+        o.x, o.y, o.z, o.w = o.w, o.z, -o.y, -o.x
 
         # place block
 
@@ -414,6 +440,13 @@ class RobotFSM(Node):
         # open gripper
 
         success = await self.manipulator.move_gripper("open")
+
+        if not success:
+            return False
+        
+        place_pose_lift = copy.deepcopy(place_pose)
+        place_pose_lift.pose.position.z = 0.0
+        success = await self.manipulator.move_to_pose(place_pose_lift)
 
         if not success:
             return False

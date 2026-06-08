@@ -36,24 +36,24 @@ controller_server:
     general_goal_checker:
       stateful: true
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.15
+      xy_goal_tolerance: 0.10
       yaw_goal_tolerance: 0.10
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"
       time_steps: 40
       model_dt: 0.05
       batch_size: 1000
-      ax_max: 3.0
-      ax_min: -3.0
+      ax_max: 1.0
+      ax_min: -1.0
       ay_max: 3.0
-      az_max: 3.5
+      az_max: 1.2
       vx_std: 0.2
       vy_std: 0.0
-      wz_std: 0.4
-      vx_max: 0.5
+      wz_std: 0.2
+      vx_max: 0.9
       vx_min: -0.35
       vy_max: 0.0
-      wz_max: 1.9
+      wz_max: 1.0
       iteration_count: 1
       prune_distance: 1.7
       transform_tolerance: 0.5
@@ -273,10 +273,10 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [2.0, 0.0, 4.0]
-    min_velocity: [-2.0, 0.0, -4.0]
-    max_accel: [20.0, 0.0, 25.0]
-    max_decel: [-20.0, 0.0, -25.0]
+    max_velocity: [0.9, 0.0, 1.0]
+    min_velocity: [-0.35, 0.0, -1.0]
+    max_accel: [1.0, 0.0, 1.2]
+    max_decel: [-1.0, 0.0, -1.5]
     odom_topic: "platform/odom/filtered"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]

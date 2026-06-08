@@ -19,16 +19,16 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 ARGUMENTS = [
-    DeclareLaunchArgument('use_sim_time', default_value='true',
+    DeclareLaunchArgument('use_sim_time', default_value='false',
                           choices=['true', 'false'],
                           description='Use simulation clock'),
     DeclareLaunchArgument('namespace', default_value='j100_0897',
                           description='Robot namespace'),
     DeclareLaunchArgument('tag_id', default_value='15',
                           description='ArUco tag id mounted on this robot'),
-    DeclareLaunchArgument('marker_offset_x', default_value='0.0',
+    DeclareLaunchArgument('marker_offset_x', default_value='-0.365',
                           description='base_link->marker x offset [m]'),
-    DeclareLaunchArgument('marker_offset_y', default_value='0.365',
+    DeclareLaunchArgument('marker_offset_y', default_value='0.0',
                           description='base_link->marker y offset [m]'),
     DeclareLaunchArgument('marker_offset_yaw', default_value='0.0',
                           description='base_link->marker yaw offset [rad]'),
