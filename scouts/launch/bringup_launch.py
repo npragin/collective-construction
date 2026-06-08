@@ -67,7 +67,6 @@ def generate_launch_description():
         replacements={'<robot_namespace>': ('/', namespace)},
         condition=IfCondition(use_namespace),
     )
-    print('getting past here?')
     configured_params = ParameterFile(
         RewrittenYaml(
             source_file=params_file,
@@ -77,6 +76,7 @@ def generate_launch_description():
         ),
         allow_substs=True,
     )
+    print('getting past here?')
 
     stdout_linebuf_envvar = SetEnvironmentVariable(
         'RCUTILS_LOGGING_BUFFERED_STREAM', '1'
