@@ -168,6 +168,7 @@ def generate_launch_description():
                 remappings=remappings,
                 output='screen',
             ),
+            
             # IncludeLaunchDescription launches another launch file
             # if were doing slamp and its localizing (creating map->odom)
             IncludeLaunchDescription(
@@ -183,6 +184,7 @@ def generate_launch_description():
                     'params_file': params_file,
                 }.items(),
             ),
+
             # if we're not using slam and just doing localizing (creating map->odom)
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
@@ -200,6 +202,7 @@ def generate_launch_description():
                     'container_name': 'nav2_container',
                 }.items(),
             ),
+
             # start up navigation.
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(

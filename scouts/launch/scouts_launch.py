@@ -61,41 +61,41 @@ def generate_launch_description():
         # ),
 
         # Rosaria pioneer driver
-        Node(
-            package="rosaria2",
-            executable="rosaria2_debug",
-            name="rosaria2_node",
-            namespace=namespace,
-            output="screen",
-            remappings=[
-                ("pose", "odom"),
-            ],
-            parameters=[
-                {
-                    "port": "/dev/ttyUSB0",
-                    "frame_id": "sierra/base_link",
-                    "odom_frame_id": "sierra/odom",
-                    "tf_prefix": "rename_when_launching",
-                }
-            ],
-            arguments=[
-                "--ros-args",
-                "--log-level",
-                "warn",
-            ],
-        ),
+        # Node(
+        #     package="rosaria2",
+        #     executable="rosaria2_debug",
+        #     name="rosaria2_node",
+        #     namespace=namespace,
+        #     output="screen",
+        #     remappings=[
+        #         ("pose", "odom"),
+        #     ],
+        #     parameters=[
+        #         {
+        #             "port": "/dev/ttyUSB0",
+        #             "frame_id": "sierra/base_link",
+        #             "odom_frame_id": "sierra/odom",
+        #             "tf_prefix": "rename_when_launching",
+        #         }
+        #     ],
+        #     arguments=[
+        #         "--ros-args",
+        #         "--log-level",
+        #         "warn",
+        #     ],
+        # ),
 
         # RealSense camera
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(realsense_launch),
-            launch_arguments={
-                "initial_reset": "true",
-                "camera_namespace": namespace,
-                "depth_module.depth_profile": "1280x720x30",
-                "rgb_camera.color_profile": "1280x720x30",
-                "enable_sync": "true",
-            }.items(),
-        ),
+        # IncludeLaunchDescription(
+        #     PythonLaunchDescriptionSource(realsense_launch),
+        #     launch_arguments={
+        #         "initial_reset": "true",
+        #         "camera_namespace": namespace,
+        #         "depth_module.depth_profile": "1280x720x30",
+        #         "rgb_camera.color_profile": "1280x720x30",
+        #         "enable_sync": "true",
+        #     }.items(),
+        # ),
 
         Node(
             package="scouts",
