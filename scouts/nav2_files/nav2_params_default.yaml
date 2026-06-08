@@ -1,24 +1,16 @@
-
-# localization of robot using Monte carlo localization, produces map -> odom
 amcl:
   ros__parameters:
-    # alpha1: 0.2
-    # alpha2: 0.2
-    # alpha3: 0.2
-    # alpha4: 0.2
-    # alpha5: 0.2
-    alpha1: 0.0
-    alpha2: 0.0
-    alpha3: 0.0
-    alpha4: 0.0
-    alpha5: 0.0
-    global_frame_id: "map"
-    base_frame_id: "base_link"
-    odom_frame_id: "odom"
+    alpha1: 0.2
+    alpha2: 0.2
+    alpha3: 0.2
+    alpha4: 0.2
+    alpha5: 0.2
+    base_frame_id: "base_footprint"
     beam_skip_distance: 0.5
     beam_skip_error_threshold: 0.9
     beam_skip_threshold: 0.3
     do_beamskip: false
+    global_frame_id: "map"
     lambda_short: 0.1
     laser_likelihood_max_dist: 2.0
     laser_max_range: 100.0
@@ -27,6 +19,7 @@ amcl:
     max_beams: 60
     max_particles: 2000
     min_particles: 500
+    odom_frame_id: "odom"
     pf_err: 0.05
     pf_z: 0.99
     recovery_alpha_fast: 0.0
@@ -43,23 +36,13 @@ amcl:
     z_max: 0.05
     z_rand: 0.5
     z_short: 0.05
-    scan_topic: base_scan
+    scan_topic: scan
 
-    # set_initial_pose: true
-    # initial_pose:
-    #   initial_pose_x: 2.0
-    #   initial_pose_y: 17.0
-    #   initial_pose_z: 0.0
-    #   # initial_pose_yaw: -1.5708
-    #   initial_pose_yaw: 0.0
-
-# High level navigation logic using behavior trees
-# responsible for NavigateToPose, NavigateThroughPoses, Recovery behaviors, Replanning
 bt_navigator:
   ros__parameters:
     global_frame: map
-    robot_base_frame: <namespace>/base_link
-    odom_topic: <namespace>/odom
+    robot_base_frame: base_link
+    odom_topic: /odom
     bt_loop_duration: 10
     default_server_timeout: 20
     wait_for_service_timeout: 1000
@@ -82,8 +65,6 @@ bt_navigator:
       - compute_path_error_code
       - follow_path_error_code
 
-# Outputs the robots velocity
-# inputs: Global path, current pose, local obstacles, outputs: cmd_vel
 controller_server:
   ros__parameters:
     controller_frequency: 20.0
@@ -204,28 +185,23 @@ controller_server:
       #   twirling_cost_power: 1
       #   twirling_cost_weight: 10.0
 
-# Robots short-range obstacle map
 local_costmap:
   local_costmap:
     ros__parameters:
       update_frequency: 5.0
       publish_frequency: 2.0
-      global_frame: <namespace>/odom
-      robot_base_frame: <namespace>/base_link
+      global_frame: odom
+      robot_base_frame: base_link
       rolling_window: true
-      # size of local cost map is 3m x 3m
       width: 3
       height: 3
       resolution: 0.05
       robot_radius: 0.22
       plugins: ["voxel_layer", "inflation_layer"]
-      plugins: ["static_layer", "inflation_layer"]
-      # expands obstacles
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
         inflation_radius: 0.70
-      # 3d object representation
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
@@ -235,11 +211,9 @@ local_costmap:
         z_voxels: 16
         max_obstacle_height: 2.0
         mark_threshold: 0
-        # observation_sources: scan
-        observation_sources: pointcloud
+        observation_sources: scan
         scan:
-          # topic: /base_scan
-          topic: /base_scan
+          topic: /scan
           max_obstacle_height: 2.0
           clearing: True
           marking: True
@@ -253,35 +227,31 @@ local_costmap:
         map_subscribe_transient_local: True
       always_send_full_costmap: True
 
-# whle map view and used by the planner
 global_costmap:
   global_costmap:
     ros__parameters:
       update_frequency: 1.0
       publish_frequency: 1.0
-      global_frame: <namespace>/map
-      robot_base_frame: <namespace>/base_link
+      global_frame: map
+      robot_base_frame: base_link
       robot_radius: 0.22
       resolution: 0.05
       track_unknown_space: true
-      # plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
-      plugins: ["static_layer", "inflation_layer"]
-      # # adds live laser obtacles
-      # obstacle_layer:
-      #   plugin: "nav2_costmap_2d::ObstacleLayer"
-      #   enabled: True
-      #   observation_sources: scan
-      #   scan:
-      #     topic: /base_scan
-      #     max_obstacle_height: 2.0
-      #     clearing: True
-      #     marking: True
-      #     data_type: "LaserScan"
-      #     raytrace_max_range: 3.0
-      #     raytrace_min_range: 0.0
-      #     obstacle_max_range: 2.5
-      #     obstacle_min_range: 0.0
-      # loads occ grid map, shows wall and permanent obstacles
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+          raytrace_max_range: 3.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 2.5
+          obstacle_min_range: 0.0
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
@@ -305,7 +275,6 @@ map_saver:
     occupied_thresh_default: 0.65
     map_subscribe_transient_local: True
 
-# what route should i take?
 planner_server:
   ros__parameters:
     expected_planner_frequency: 20.0
@@ -317,7 +286,6 @@ planner_server:
       use_astar: false
       allow_unknown: true
 
-# taken planner output and smoothes it
 smoother_server:
   ros__parameters:
     smoother_plugins: ["simple_smoother"]
@@ -327,7 +295,6 @@ smoother_server:
       max_its: 1000
       do_refinement: True
 
-# recovery behaviors
 behavior_server:
   ros__parameters:
     local_costmap_topic: local_costmap/costmap_raw
@@ -346,16 +313,15 @@ behavior_server:
       plugin: "nav2_behaviors::Wait"
     assisted_teleop:
       plugin: "nav2_behaviors::AssistedTeleop"
-    local_frame: <namespace>/odom
-    global_frame: <namespace>/map
-    robot_base_frame: <namespace>/base_link
+    local_frame: odom
+    global_frame: map
+    robot_base_frame: base_link
     transform_tolerance: 0.1
     simulate_ahead_time: 2.0
     max_rotational_vel: 1.0
     min_rotational_vel: 0.4
     rotational_acc_lim: 3.2
 
-# waypoint parameters
 waypoint_follower:
   ros__parameters:
     loop_rate: 20
@@ -367,7 +333,6 @@ waypoint_follower:
       enabled: True
       waypoint_pause_duration: 200
 
-# road style navigation (warehouses, roads, ect)
 route_server:
   ros__parameters:
     # The graph_filepath does not need to be specified since it going to be set by defaults in launch.
@@ -391,7 +356,6 @@ route_server:
     CostmapScorer:
       plugin: "nav2_route::CostmapScorer"
 
-# filters vel commands to be smoother
 velocity_smoother:
   ros__parameters:
     smoothing_frequency: 20.0
@@ -409,7 +373,7 @@ velocity_smoother:
 
 collision_monitor:
   ros__parameters:
-    base_frame_id: "base_link"
+    base_frame_id: "base_footprint"
     odom_frame_id: "odom"
     cmd_vel_in_topic: "cmd_vel_smoothed"
     cmd_vel_out_topic: "cmd_vel"
@@ -433,12 +397,11 @@ collision_monitor:
     observation_sources: ["scan"]
     scan:
       type: "scan"
-      topic: "base_scan"
+      topic: "scan"
       min_height: 0.15
       max_height: 2.0
       enabled: True
 
-# handles autonomous charging dock alignment
 docking_server:
   ros__parameters:
     controller_frequency: 50.0
@@ -492,10 +455,9 @@ docking_server:
       simulation_step: 0.1
       dock_collision_threshold: 0.3
 
-# fake robot simulator
 loopback_simulator:
   ros__parameters:
-    base_frame_id: "base_link"
+    base_frame_id: "base_footprint"
     odom_frame_id: "odom"
     map_frame_id: "map"
     scan_frame_id: "base_scan"  # tb4_loopback_simulator.launch.py remaps to 'rplidar_link'
