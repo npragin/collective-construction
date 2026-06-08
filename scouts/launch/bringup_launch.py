@@ -69,7 +69,7 @@ def generate_launch_description():
     params_file = ReplaceString(
         source_file=params_file,
         # replacements={'<robot_namespace>': ('/', namespace)},
-        replacements={'<robot_namespace>': namespace},
+        replacements={'<namespace>': ('', namespace)},
         condition=IfCondition(use_namespace), # if use_namespace:=True during launch command
     )
 
