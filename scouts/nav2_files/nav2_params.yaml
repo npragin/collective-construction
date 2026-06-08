@@ -218,7 +218,7 @@ local_costmap:
       height: 3
       resolution: 0.05
       robot_radius: 0.22
-      plugins: ["voxel_layer", "inflation_layer"]
+      # plugins: ["voxel_layer", "inflation_layer"]
       plugins: ["static_layer", "inflation_layer"]
       # expands obstacles
       inflation_layer:
@@ -235,8 +235,8 @@ local_costmap:
         z_voxels: 16
         max_obstacle_height: 2.0
         mark_threshold: 0
-        # observation_sources: scan
-        observation_sources: pointcloud
+        observation_sources: scan
+        # observation_sources: pointcloud
         scan:
           # topic: /base_scan
           topic: /base_scan
@@ -267,20 +267,20 @@ global_costmap:
       # plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       plugins: ["static_layer", "inflation_layer"]
       # # adds live laser obtacles
-      # obstacle_layer:
-      #   plugin: "nav2_costmap_2d::ObstacleLayer"
-      #   enabled: True
-      #   observation_sources: scan
-      #   scan:
-      #     topic: /base_scan
-      #     max_obstacle_height: 2.0
-      #     clearing: True
-      #     marking: True
-      #     data_type: "LaserScan"
-      #     raytrace_max_range: 3.0
-      #     raytrace_min_range: 0.0
-      #     obstacle_max_range: 2.5
-      #     obstacle_min_range: 0.0
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan
+        scan:
+          topic: /base_scan
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+          raytrace_max_range: 3.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 2.5
+          obstacle_min_range: 0.0
       # loads occ grid map, shows wall and permanent obstacles
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
@@ -420,7 +420,8 @@ collision_monitor:
     stop_pub_timeout: 2.0
     # Polygons represent zone around the robot for "stop", "slowdown" and "limit" action types,
     # and robot footprint for "approach" action type.
-    polygons: ["FootprintApproach"]
+    # polygons: ["FootprintApproach"]
+    polygons: []
     FootprintApproach:
       type: "polygon"
       action_type: "approach"
@@ -430,7 +431,8 @@ collision_monitor:
       min_points: 6
       visualize: False
       enabled: True
-    observation_sources: ["scan"]
+    # observation_sources: ["scan"]
+    observation_sources: []
     scan:
       type: "scan"
       topic: "base_scan"
