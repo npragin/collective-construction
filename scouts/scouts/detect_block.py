@@ -198,7 +198,7 @@ class DetectBlock(Node):
 
                         self.get_logger().info(f'T_marker_to_robot: {T_marker_to_robot}')
                         dist_to_block = np.hypot(T_marker_to_robot[0].item(), T_marker_to_robot[1].item())
-                        if dist_to_block > max_block_dist:
+                        if dist_to_block > self.max_block_dist:
                             continue
     
                         self.logger.debug(
@@ -315,33 +315,6 @@ class DetectBlock(Node):
             marker.color.a = 1.0
             marker_array.markers.append(marker)
         self.marker_pub.publish(marker_array)
-
-
-    # def segment_color(self, cv_image):
-    #         # Convert the image to HSV color space for better color segmentation
-    #         hsv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
-
-    #         # Define the lower and upper bounds for the block's color in HSV space
-    #         # do orange instead
-    #         lower_color = np.array([2, 100, 100])  # lower bound (orange color)
-    #         upper_color = np.array([10, 255, 255])  # Example upper
-
-    #         # Create a mask using the defined color bounds
-    #         mask = cv2.inRange(hsv_image, lower_color, upper_color)
-
-    #         # Find contours in the mask
-    #         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    #         if contours:
-    #             largest_contour = max(contours, key=cv2.contourArea)
-    #             M = cv2.moments(largest_contour)
-    #             if M["m00"] > 50:
-    #                 cX = int(M["m10"] / M["m00"])
-    #                 cY = int(M["m01"] / M["m00"])
-    #                 self.logger.debug(f"Segmented block at pixel coordinates: ({cX}, {cY})")
-    #                 return True, cX, cY
-    #         return False, None, None
-
 
 
 def main(args=None):
