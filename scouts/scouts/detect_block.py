@@ -189,14 +189,14 @@ class DetectBlock(Node):
                         T_cam_to_robot = np.array(
                             [[-0.1], [0], [0]]
                         )  # camera is 10cm in front of the robot axis
-                        self.get_logger().info(f'tvec: {tvec}')
+                        # self.get_logger().info(f'tvec: {tvec}')
     
                         T_marker_in_cam = tvec.reshape(3, 1)
                         T_marker_to_robot = (
                             R_cam_to_robot @ T_marker_in_cam + T_cam_to_robot
                         )
 
-                        self.get_logger().info(f'T_marker_to_robot: {T_marker_to_robot}')
+                        # self.get_logger().info(f'T_marker_to_robot: {T_marker_to_robot}')
                         dist_to_block = np.hypot(T_marker_to_robot[0].item(), T_marker_to_robot[1].item())
                         if dist_to_block > self.max_block_dist:
                             continue
