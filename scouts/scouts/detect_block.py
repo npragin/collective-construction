@@ -192,6 +192,8 @@ class DetectBlock(Node):
                         T_marker_to_robot = (
                             R_cam_to_robot @ T_marker_in_cam + T_cam_to_robot
                         )
+                        self.get_logger().info(f'T_marker_to_robot: {T_marker_to_robot}')
+
     
                         self.logger.debug(
                             f"Tag Detected: Marker center is {T_marker_to_robot[0]} m away,  {T_marker_to_robot[1]} m to the left, and {T_marker_to_robot[2]} m down)",
