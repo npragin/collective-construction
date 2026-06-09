@@ -58,6 +58,9 @@ class DetectBlock(Node):
             self
         )
 
+        # ignore blocks more then this distance away.
+        self.max_block_dist = 1.0
+
         self.marker_pub = self.create_publisher(MarkerArray, 'found_blocks', 10)
         self.found_blocks = []
 
@@ -192,8 +195,11 @@ class DetectBlock(Node):
                         T_marker_to_robot = (
                             R_cam_to_robot @ T_marker_in_cam + T_cam_to_robot
                         )
-                        self.get_logger().info(f'T_marker_to_robot: {T_marker_to_robot}')
 
+                        self.get_logger().info(f'T_marker_to_robot: {T_marker_to_robot}')
+                        dist_to_block = np.hypot(T_marker_to_robot[0].item(), T_marker_to_robot[1].item())
+                        if dist_to_block > max_block_dist:
+                            continue
     
                         self.logger.debug(
                             f"Tag Detected: Marker center is {T_marker_to_robot[0]} m away,  {T_marker_to_robot[1]} m to the left, and {T_marker_to_robot[2]} m down)",
