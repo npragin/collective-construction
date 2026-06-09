@@ -118,6 +118,14 @@ def generate_launch_description():
             output="screen",
         ),
 
+        Node(
+            package="scouts",
+            executable="path_planner_node",
+            name="path_planner_node",
+            namespace=namespace,
+            output="screen",
+        ),
+
         # Node(
         #     package='scouts',
         #     executable='check_tags',
