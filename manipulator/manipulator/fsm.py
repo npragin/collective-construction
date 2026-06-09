@@ -263,13 +263,13 @@ class RobotFSM(Node):
 
         # navigating to the block
 
-        self.state = State.NAVIGATE_TO_PICKUP
-        pickup_offset = self.offset_pose(pickup_pose, self.x_offset, self.y_offset)
+        # self.state = State.NAVIGATE_TO_PICKUP
+        # pickup_offset = self.offset_pose(pickup_pose, self.x_offset, self.y_offset)
 
-        success = await self.navigate_to_pose(pickup_offset)
-        self.get_logger().info(f'Arrived at pickup location: {success}')
-        if not success:
-            return False
+        # success = await self.navigate_to_pose(pickup_offset)
+        # self.get_logger().info(f'Arrived at pickup location: {success}')
+        # if not success:
+        #     return False
         
         
         # Detect block
@@ -309,6 +309,9 @@ class RobotFSM(Node):
         return True
 
     async def navigate_to_pose(self, pose):
+
+        pose.header.stamp.sec = 0
+        pose.header.stamp.nanosec = 0
 
         self.get_logger().info(f'Navigating to: 'f'({pose.pose.position.x}, 'f'{pose.pose.position.y})')
 

@@ -29,8 +29,8 @@ class TestFSM(Node):
         self.place = PoseStamped()
         self.place.header.frame_id = 'world'
         self.place.header.stamp = self.get_clock().now().to_msg()
-        self.place.pose.position.x = 2.0
-        self.place.pose.position.y = 2.0
+        self.place.pose.position.x = 2.5
+        self.place.pose.position.y = 0.5
         self.place.pose.orientation.w = 1.0  # Facing forward
 
         # self.place = PoseStamped()
