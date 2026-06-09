@@ -59,7 +59,7 @@ class DetectBlock(Node):
         )
 
         # ignore blocks more then this distance away.
-        self.max_block_dist = 1.0
+        self.max_block_dist = 2.0
 
         self.marker_pub = self.create_publisher(MarkerArray, 'found_blocks', 10)
         self.found_blocks = []
