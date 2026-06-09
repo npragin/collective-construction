@@ -8,6 +8,10 @@ from nav2_msgs.action import FollowWaypoints
 class Nav2ActionClient(Node):
     def __init__(self):
         super().__init__('nav2_action_client')
+
+        self.get_logger().info('Path Planner Node is Up!')
+
+
         self.action_client = ActionClient(self, FollowWaypoints, 'follow_waypoints')
 
         # self.marker_pub = self.create_publisher(MarkerArray, 'waypoint_markers', 10)
