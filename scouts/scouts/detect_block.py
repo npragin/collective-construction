@@ -1,3 +1,5 @@
+
+
 import rclpy
 from rclpy.node import Node
 
@@ -91,6 +93,9 @@ class DetectBlock(Node):
         self.ts = message_filters.ApproximateTimeSynchronizer(
             [self.color_sub, self.color_info], queue_size, slop
         )
+
+        self.detection_queue = deque(maxlen=20)
+        self.create_timer(0.05, self.process_detection_queue)  # drain queue every 50ms
 
         # callback that happens when synced messages come from above
         self.ts.registerCallback(self.cam_callback)
@@ -216,41 +221,50 @@ class DetectBlock(Node):
                             y: {candidate_pose_stamped.pose.position.y}, \
                             z: {candidate_pose_stamped.pose.position.z}')
     
-                        
-                        candidate_pose_stamped = self.tf_buffer.transform(
-                            candidate_pose_stamped,
-                            'world'
-                        )
-    
-                        # self.get_logger().info(f'Pose in frame_id world:  \
-                        #     x: {candidate_pose_stamped.pose.position.x}, \
-                        #     y: {candidate_pose_stamped.pose.position.y}, \
-                        #     z: {candidate_pose_stamped.pose.position.z}')
-    
-                        candidate_block = Block()
-                        candidate_block.type = Block.TYPE_B # TODO this is just an examples, need to change
 
-                        candidate_block.pose = candidate_pose_stamped
-    
-                        # check to see if this is a duplicate block
-                        duplicate = False
-                        for found_block, found_id in self.found_blocks:   
-                            if found_id == candidate_block_id:
-                                found_block.pose = candidate_pose_stamped
-                                self.get_logger().info(f'Block {candidate_block_id} is a duplicate')
-                                duplicate = True
+                        # replace the tf_buffer.transform() call with this
+                        self.detection_queue.append({
+                            'stamp': msg.header.stamp,
+                            'pose': candidate_pose_stamped,
+                            'block_id': candidate_block_id,
+                        })
 
-                        if duplicate:
-                            continue
+                        continue  # skip the rest, let the timer handle it
                         
-                        # this a new block
-                        self.found_blocks.append((candidate_block, candidate_block_id))
-                        
-                        # publish the newly found block
-                        self.vis_pub.publish(candidate_block) 
+                        # candidate_pose_stamped = self.tf_buffer.transform(
+                        #     candidate_pose_stamped,
+                        #     'world'
+                        # )
     
-                        # publish markes of blocks for rviz
-                        self.publish_markers()
+                        # # self.get_logger().info(f'Pose in frame_id world:  \
+                        # #     x: {candidate_pose_stamped.pose.position.x}, \
+                        # #     y: {candidate_pose_stamped.pose.position.y}, \
+                        # #     z: {candidate_pose_stamped.pose.position.z}')
+    
+                        # candidate_block = Block()
+                        # candidate_block.type = Block.TYPE_B # TODO this is just an examples, need to change
+
+                        # candidate_block.pose = candidate_pose_stamped
+    
+                        # # check to see if this is a duplicate block
+                        # duplicate = False
+                        # for found_block, found_id in self.found_blocks:   
+                        #     if found_id == candidate_block_id:
+                        #         found_block.pose = candidate_pose_stamped
+                        #         self.get_logger().info(f'Block {candidate_block_id} is a duplicate')
+                        #         duplicate = True
+
+                        # if duplicate:
+                        #     continue
+                        
+                        # # this a new block
+                        # self.found_blocks.append((candidate_block, candidate_block_id))
+                        
+                        # # publish the newly found block
+                        # self.vis_pub.publish(candidate_block) 
+    
+                        # # publish markes of blocks for rviz
+                        # self.publish_markers()
 
                 else:
                     self.logger.debug(
@@ -289,6 +303,41 @@ class DetectBlock(Node):
 
         except Exception as e:
             self.logger.error(f"Error converting image: {e}")
+
+
+    def process_detection_queue(self):
+        still_pending = deque()
+        for detection in self.detection_queue:
+            stamp = detection['stamp']
+            pose = detection['pose']
+            block_id = detection['block_id']
+    
+            if self.tf_buffer.can_transform('world', 'aruco_31', stamp):
+                try:
+                    transformed_pose = self.tf_buffer.transform(pose, 'world')
+    
+                    candidate_block = Block()
+                    candidate_block.type = Block.TYPE_B
+                    candidate_block.pose = transformed_pose
+    
+                    duplicate = False
+                    for found_block, found_id in self.found_blocks:
+                        if found_id == block_id:
+                            found_block.pose = transformed_pose
+                            duplicate = True
+    
+                    if not duplicate:
+                        self.found_blocks.append((candidate_block, block_id))
+                        self.vis_pub.publish(candidate_block)
+                        self.publish_markers()
+    
+                except Exception as e:
+                    self.get_logger().warn(f'Transform failed even after can_transform: {e}')
+            else:
+                still_pending.append(detection)  # TF not here yet, try again next timer tick
+    
+        self.detection_queue = still_pending
+
 
     def publish_markers(self):
         marker_array = MarkerArray()
