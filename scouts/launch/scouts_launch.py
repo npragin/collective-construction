@@ -52,13 +52,13 @@ def generate_launch_description():
         #     output="screen",
         # ),
 
-        Node(
-            package="scouts",
-            executable="aruco2odom_tf",
-            name="arcuo2odom_tf",
-            namespace=namespace,
-            output="screen",
-        ),
+        # Node(
+        #     package="scouts",
+        #     executable="aruco2odom_tf",
+        #     name="arcuo2odom_tf",
+        #     namespace=namespace,
+        #     output="screen",
+        # ),
         
         # Node(
         #     package="scouts",
