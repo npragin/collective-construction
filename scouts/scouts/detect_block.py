@@ -27,7 +27,8 @@ from visualization_msgs.msg import Marker, MarkerArray
 This code was developed by Zane and Atharv and edited slightly by Liam
 """
 
-MARKER_SIZE = 0.04
+# MARKER_SIZE = 0.043
+MARKER_SIZE = 0.035
 OBJ_PTS = np.array(
     [
         [-MARKER_SIZE / 2, MARKER_SIZE / 2, 0.0],
