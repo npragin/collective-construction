@@ -25,6 +25,8 @@ import tf2_geometry_msgs
 
 from visualization_msgs.msg import Marker, MarkerArray
 
+from collections import deque
+
 """
 This code was developed by Zane and Atharv and edited slightly by Liam
 """
