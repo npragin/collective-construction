@@ -176,12 +176,7 @@ class DetectBlock(Node):
                                 [0, -1, 0],
                             ]
                         )
-    
-                        # this code accounts for the retriever camera pointing 30 degrees down.
-                        # R_cam_angle_to_robot = create_rotation_matrix(
-                        #     pitch=30, units="degrees"
-                        # )
-                        # R_cam_to_robot = R_cam_angle_to_robot @ R_image_to_robot_axes
+
                         R_cam_to_robot = R_image_to_robot_axes
     
     
@@ -204,9 +199,9 @@ class DetectBlock(Node):
                         
                         candidate_pose_stamped = PoseStamped()
                         # candidate_pose_stamped.header.frame_id = f'{self.get_namespace()}/aruco_31'[1:]
-                        candidate_pose_stamped.header.frame_id = 'aruco_31'
+                        # candidate_pose_stamped.header.frame_id = 'aruco_31'
                         # candidate_pose_stamped.header.stamp = msg.header.stamp
-                        # candidate_pose_stamped.header.frame_id = 'sierra/base_link'
+                        candidate_pose_stamped.header.frame_id = 'sierra/base_link'
 
                         candidate_pose_stamped.pose.position.x = float(T_marker_to_robot[0])
                         candidate_pose_stamped.pose.position.y = float(T_marker_to_robot[1])
@@ -233,40 +228,6 @@ class DetectBlock(Node):
 
                         continue  # skip the rest, let the timer handle it
                         
-                        # candidate_pose_stamped = self.tf_buffer.transform(
-                        #     candidate_pose_stamped,
-                        #     'world'
-                        # )
-    
-                        # # self.get_logger().info(f'Pose in frame_id world:  \
-                        # #     x: {candidate_pose_stamped.pose.position.x}, \
-                        # #     y: {candidate_pose_stamped.pose.position.y}, \
-                        # #     z: {candidate_pose_stamped.pose.position.z}')
-    
-                        # candidate_block = Block()
-                        # candidate_block.type = Block.TYPE_B # TODO this is just an examples, need to change
-
-                        # candidate_block.pose = candidate_pose_stamped
-    
-                        # # check to see if this is a duplicate block
-                        # duplicate = False
-                        # for found_block, found_id in self.found_blocks:   
-                        #     if found_id == candidate_block_id:
-                        #         found_block.pose = candidate_pose_stamped
-                        #         self.get_logger().info(f'Block {candidate_block_id} is a duplicate')
-                        #         duplicate = True
-
-                        # if duplicate:
-                        #     continue
-                        
-                        # # this a new block
-                        # self.found_blocks.append((candidate_block, candidate_block_id))
-                        
-                        # # publish the newly found block
-                        # self.vis_pub.publish(candidate_block) 
-    
-                        # # publish markes of blocks for rviz
-                        # self.publish_markers()
 
                 else:
                     self.logger.debug(
@@ -282,26 +243,6 @@ class DetectBlock(Node):
             # publish markes of blocks for rviz
             self.publish_markers()
 
-            # if not pose_status.tag_in_frame:
-            #     pose_status.block_in_frame, x, y = self.segment_color(
-            #         cv_image
-            #     )  # if no tags are detected, try to segment based on color as a fallback
-            #     if pose_status.block_in_frame:
-            #         # create a fake pose with a y position scaled based on the negative x value of the image. Make a rough x pose based on y in frame
-            #         pose_status.pose.position.x = 0.5 + max(
-            #             min(-0.001 * (y - cv_image.shape[0] / 2), 0.5), -0.5
-            #         )
-            #         pose_status.pose.position.y = max(
-            #             min(-0.001 * (x - cv_image.shape[1] / 2), 0.5), -0.5
-            #         )
-            #         pose_status.pose.position.z = 0.0
-            #         pose_status.pose.orientation.w = 1.0
-            #         self.logger.debug(
-            #             f"Tag not detected, using color segmentation. Estimated pose: ({pose_status.pose.position.x}, {pose_status.pose.position.y}, {pose_status.pose.position.z})",
-            #             throttle_duration_sec=1.0,
-            #         )
-
-            # self.vis_pub.publish(pose_status)
 
         except Exception as e:
             self.logger.error(f"Error converting image: {e}")
