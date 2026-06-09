@@ -61,7 +61,7 @@ class DetectBlock(Node):
         self.marker_pub = self.create_publisher(MarkerArray, 'found_blocks', 10)
         self.found_blocks = []
 
-        self.bridge = CvBridge() # converts between ros2 image messages and openCV images
+        self.bridge = CvBridge() # converts between ros2 image messages and openCV images w
 
         # publishes the visible block poses to the central planner
         self.vis_pub = self.create_publisher(
