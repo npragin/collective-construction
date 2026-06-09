@@ -209,10 +209,10 @@ class DetectBlock(Node):
                         candidate_pose_stamped.pose.orientation.z = z
                         candidate_pose_stamped.pose.orientation.w = w
     
-                        self.get_logger().info(f'Pose in frame_id baselink: { \
-                            candidate_pose_stamped.pose.position.x, \
-                            candidate_pose_stamped.pose.position.y, \
-                            candidate_pose_stamped.pose.position.z}')
+                        self.get_logger().info(f'Pose in frame_id baselink: \
+                            x: {candidate_pose_stamped.pose.position.x}, \
+                            y: {candidate_pose_stamped.pose.position.y}, \
+                            z: {candidate_pose_stamped.pose.position.z}')
     
                         
                         candidate_pose_stamped = self.tf_buffer.transform(
@@ -220,10 +220,10 @@ class DetectBlock(Node):
                             'world'
                         )
     
-                        self.get_logger().info(f'Pose in frame_id world: { \
-                            candidate_pose_stamped.pose.position.x, \
-                            candidate_pose_stamped.pose.position.y, \
-                            candidate_pose_stamped.pose.position.z}')
+                        self.get_logger().info(f'Pose in frame_id world:  \
+                            x: {candidate_pose_stamped.pose.position.x}, \
+                            y: {candidate_pose_stamped.pose.position.y}, \
+                            z: {candidate_pose_stamped.pose.position.z}')
     
                         candidate_block = Block()
                         candidate_block.type = Block.TYPE_B # TODO this is just an examples, need to change
