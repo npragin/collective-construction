@@ -22,6 +22,8 @@ from manipulator_interface.action import TransportBlock
 from manipulator_interface.action import AbsoluteMove
 from control_msgs.action import GripperCommand
 from manipulator_interface.srv import DetectMarkers
+from cc_interfaces.action import ManipulationTask
+
 
 class State(Enum):
 
@@ -149,6 +151,9 @@ class RobotFSM(Node):
         self.manipulator_namespace = self.get_parameter("manipulator_namespace").value
         self.get_logger().info(f"Using manipulator namespace: {self.manipulator_namespace}")
 
+        self.declare_parameter('task_namespace', 'manipulator_1')
+        task_ns = self.get_parameter('task_namespace').value
+        self.get_logger().info(f'Using task namespace: {task_ns}')
 
         self.navigator = BasicNavigator(namespace=self.namespace)
         self.get_logger().info('Waiting for Nav2...')
@@ -169,7 +174,16 @@ class RobotFSM(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         self.action_server = ActionServer(self,TransportBlock,'transport_block',execute_callback=self.execute_callback)
+
+        self.action_server = ActionServer(
+            self, ManipulationTask, f'/{task_ns}/manipulation_task',
+            execute_callback=self.execute_callback_2)
+        self.get_logger().info(
+            f'ManipulationTask server ready on /{task_ns}/manipulation_task')
+
         self.get_logger().info('Robot FSM Ready')
+
+
 
         self.x_offset = -0.485 #meters
         self.y_offset = 0.0 #meters
@@ -226,6 +240,55 @@ class RobotFSM(Node):
 
         return new_pose
 
+    async def execute_callback_2(self, goal_handle):
+        """Navigate to the stockpile centroid and report success."""
+        stockpile = goal_handle.request.stockpile
+        points = stockpile.polygon.points
+
+        result = ManipulationTask.Result()
+        if not points:
+            self.get_logger().error('Stockpile polygon has no points')
+            goal_handle.abort()
+            result.success = False
+            return result
+
+        if self.state != State.IDLE:
+            goal_handle.reject()
+            result.success = False
+            return result
+
+        cx = sum(p.x for p in points) / len(points)
+        cy = sum(p.y for p in points) / len(points)
+        frame = stockpile.header.frame_id or 'world'
+
+        # self.get_logger().info(
+        #     f'Stockpile centroid ({cx:.3f}, {cy:.3f}) [{frame}]; '
+        #     f'parking at ({gx:.3f}, {cy:.3f}) with {self.stockpile_standoff:.2f} m '
+        #     f'-x standoff, facing +x')
+
+        goal = PoseStamped()
+        goal.header.frame_id = frame
+        goal.header.stamp = self.get_clock().now().to_msg()
+        goal.pose.position.x = cx
+        goal.pose.position.y = cy
+        goal.pose.orientation.w = 1.0  # yaw 0 -> facing world +x, toward stockpile
+
+        pickup_pose = goal
+        dropoff_pose = goal_handle.request.block.pose
+
+        success = await self.execute_mission(pickup_pose,dropoff_pose)
+        result.success = success
+        self.get_logger().info(f'Mission execution result: {success}')
+
+        if success:
+            self.state = State.IDLE
+            goal_handle.succeed()
+        else:
+            self.state = State.IDLE
+            goal_handle.abort()
+        return result
+
+
     # action server callback
 
     async def execute_callback(self, goal_handle):
@@ -263,13 +326,13 @@ class RobotFSM(Node):
 
         # navigating to the block
 
-        # self.state = State.NAVIGATE_TO_PICKUP
-        # pickup_offset = self.offset_pose(pickup_pose, self.x_offset, self.y_offset)
+        self.state = State.NAVIGATE_TO_PICKUP
+        pickup_offset = self.offset_pose(pickup_pose, self.x_offset, self.y_offset)
 
-        # success = await self.navigate_to_pose(pickup_offset)
-        # self.get_logger().info(f'Arrived at pickup location: {success}')
-        # if not success:
-        #     return False
+        success = await self.navigate_to_pose(pickup_offset)
+        self.get_logger().info(f'Arrived at pickup location: {success}')
+        if not success:
+            return False
         
         
         # Detect block
@@ -286,7 +349,7 @@ class RobotFSM(Node):
         if not success:
             return False
 
-        # # navigate to drop off
+        # navigate to drop off
 
         self.state = State.NAVIGATE_TO_DROPOFF
         dropoff_offset = self.offset_pose(dropoff_pose, self.x_offset, self.y_offset)
@@ -300,8 +363,8 @@ class RobotFSM(Node):
         self.state = State.PLACE_BLOCK
         success = await self.place_block(dropoff_pose)
 
-        # if not success:
-        #     return False
+        if not success:
+            return False
 
         self.state = State.COMPLETE
         self.get_logger().info('Mission completed successfully')
