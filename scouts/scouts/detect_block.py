@@ -200,7 +200,7 @@ class DetectBlock(Node):
                         candidate_pose_stamped = PoseStamped()
                         # candidate_pose_stamped.header.frame_id = f'{self.get_namespace()}/aruco_31'[1:]
                         # candidate_pose_stamped.header.frame_id = 'aruco_31'
-                        # candidate_pose_stamped.header.stamp = msg.header.stamp
+                        candidate_pose_stamped.header.stamp = self.get_clock().now().to_msg()
                         candidate_pose_stamped.header.frame_id = 'sierra/base_link'
 
                         candidate_pose_stamped.pose.position.x = float(T_marker_to_robot[0])
