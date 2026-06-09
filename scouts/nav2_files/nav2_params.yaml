@@ -1,66 +1,11 @@
 
-# localization of robot using Monte carlo localization, produces map -> odom
-amcl:
-  ros__parameters:
-    # alpha1: 0.2
-    # alpha2: 0.2
-    # alpha3: 0.2
-    # alpha4: 0.2
-    # alpha5: 0.2
-    alpha1: 0.0
-    alpha2: 0.0
-    alpha3: 0.0
-    alpha4: 0.0
-    alpha5: 0.0
-    global_frame_id: "map"
-    base_frame_id: "base_link"
-    odom_frame_id: "odom"
-    beam_skip_distance: 0.5
-    beam_skip_error_threshold: 0.9
-    beam_skip_threshold: 0.3
-    do_beamskip: false
-    lambda_short: 0.1
-    laser_likelihood_max_dist: 2.0
-    laser_max_range: 100.0
-    laser_min_range: -1.0
-    laser_model_type: "likelihood_field"
-    max_beams: 60
-    max_particles: 2000
-    min_particles: 500
-    pf_err: 0.05
-    pf_z: 0.99
-    recovery_alpha_fast: 0.0
-    recovery_alpha_slow: 0.0
-    resample_interval: 1
-    robot_model_type: "nav2_amcl::DifferentialMotionModel"
-    save_pose_rate: 0.5
-    sigma_hit: 0.2
-    tf_broadcast: true
-    transform_tolerance: 1.0
-    update_min_a: 0.2
-    update_min_d: 0.25
-    z_hit: 0.5
-    z_max: 0.05
-    z_rand: 0.5
-    z_short: 0.05
-    scan_topic: base_scan
-
-    # set_initial_pose: true
-    # initial_pose:
-    #   initial_pose_x: 2.0
-    #   initial_pose_y: 17.0
-    #   initial_pose_z: 0.0
-    #   # initial_pose_yaw: -1.5708
-    #   initial_pose_yaw: 0.0
-
 # High level navigation logic using behavior trees
 # responsible for NavigateToPose, NavigateThroughPoses, Recovery behaviors, Replanning
 bt_navigator:
   ros__parameters:
     global_frame: world
-    # robot_base_frame: <namespace>/base_link
-    robot_base_frame: sierra/base_link
-    odom_topic: sierra/odom
+    robot_base_frame: <namespace>/base_link
+    odom_topic: <namespace>/odom
     bt_loop_duration: 10
     default_server_timeout: 20
     wait_for_service_timeout: 1000
@@ -211,8 +156,8 @@ local_costmap:
     ros__parameters:
       update_frequency: 5.0
       publish_frequency: 2.0
-      global_frame: sierra/odom
-      robot_base_frame: sierra/base_link
+      global_frame: <namespace>/odom
+      robot_base_frame: <namespace>/base_link
       rolling_window: true
       # size of local cost map is 3m x 3m
       width: 3
@@ -227,31 +172,41 @@ local_costmap:
         cost_scaling_factor: 3.0
         inflation_radius: 0.70
       # 3d object representation
-      voxel_layer:
-        plugin: "nav2_costmap_2d::VoxelLayer"
-        enabled: True
-        publish_voxel_map: True
-        origin_z: 0.0
-        z_resolution: 0.05
-        z_voxels: 16
-        max_obstacle_height: 2.0
-        mark_threshold: 0
-        observation_sources: scan
-        # observation_sources: pointcloud
-        scan:
-          # topic: /base_scan
-          topic: /base_scan
-          max_obstacle_height: 2.0
-          clearing: True
-          marking: True
-          data_type: "LaserScan"
-          raytrace_max_range: 3.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 2.5
-          obstacle_min_range: 0.0
+      # voxel_layer:
+      #   plugin: "nav2_costmap_2d::VoxelLayer"
+      #   enabled: True
+      #   publish_voxel_map: True
+      #   origin_z: 0.0
+      #   z_resolution: 0.05
+      #   z_voxels: 16
+      #   max_obstacle_height: 2.0
+      #   mark_threshold: 0
+      #   # observation_sources: scan
+      #   # scan:
+      #     # topic: /base_scan
+      #     # max_obstacle_height: 2.0
+      #     # clearing: True
+      #     # marking: True
+      #     # data_type: "LaserScan"
+      #     # raytrace_max_range: 3.0
+      #     # raytrace_min_range: 0.0
+      #     # obstacle_max_range: 2.5
+      #     # obstacle_min_range: 0.0
+      #   observation_sources: pointcloud
+      #   pointcloud:
+      #     topic: /sierra/camera/pointcloud
+      #     data_type: "PointCloud2"
+      #     marking: True
+      #     clearing: True
+      #     min_obstacle_height: 0.1
+      #     max_obstacle_height: 1.5
+      #     obstacle_max_range: 3.0
+      #     raytrace_max_range: 3.5
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: True
+        map_topic: '/koz_mask'
+        map_subscribe_transient_local: False
+        subscribe_to_updates: true
       always_send_full_costmap: True
 
 # whle map view and used by the planner
@@ -260,32 +215,34 @@ global_costmap:
     ros__parameters:
       update_frequency: 1.0
       publish_frequency: 1.0
-      global_frame: sierra/map
-      robot_base_frame: sierra/base_link
+      global_frame: world
+      robot_base_frame: <namespace>/base_link
       robot_radius: 0.22
       resolution: 0.05
       track_unknown_space: true
       # plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       plugins: ["static_layer", "inflation_layer"]
       # # adds live laser obtacles
-      obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: True
-        observation_sources: scan
-        scan:
-          topic: /base_scan
-          max_obstacle_height: 2.0
-          clearing: True
-          marking: True
-          data_type: "LaserScan"
-          raytrace_max_range: 3.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 2.5
-          obstacle_min_range: 0.0
+      # obstacle_layer:
+      #   plugin: "nav2_costmap_2d::ObstacleLayer"
+      #   enabled: True
+      #   observation_sources: scan
+      #   scan:
+      #     topic: /base_scan
+      #     max_obstacle_height: 2.0
+      #     clearing: True
+      #     marking: True
+      #     data_type: "LaserScan"
+      #     raytrace_max_range: 3.0
+      #     raytrace_min_range: 0.0
+      #     obstacle_max_range: 2.5
+      #     obstacle_min_range: 0.0
       # loads occ grid map, shows wall and permanent obstacles
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: True
+        map_topic: '/koz_mask'
+        map_subscribe_transient_local: False
+        subscribe_to_updates: true
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
@@ -298,12 +255,6 @@ global_costmap:
 # map_server:
 #   ros__parameters:
 #     yaml_filename: ""
-
-map_server:
-  ros__parameters:
-    use_sim_time: false
-    topic_name: ""  # whatever your occ grid topic is
-    frame_id: "map"
 
 map_saver:
   ros__parameters:
@@ -353,9 +304,9 @@ behavior_server:
       plugin: "nav2_behaviors::Wait"
     assisted_teleop:
       plugin: "nav2_behaviors::AssistedTeleop"
-    local_frame: sierra/odom
-    global_frame: sierra/map
-    robot_base_frame: sierra/base_link
+    local_frame: <namespace>/odom
+    global_frame: world
+    robot_base_frame: <namespace>/base_link
     transform_tolerance: 0.1
     simulate_ahead_time: 2.0
     max_rotational_vel: 1.0
@@ -502,16 +453,16 @@ docking_server:
       dock_collision_threshold: 0.3
 
 # fake robot simulator
-loopback_simulator:
-  ros__parameters:
-    base_frame_id: "base_link"
-    odom_frame_id: "odom"
-    map_frame_id: "map"
-    scan_frame_id: "base_scan"  # tb4_loopback_simulator.launch.py remaps to 'rplidar_link'
-    update_duration: 0.02
-    scan_range_min: 0.05
-    scan_range_max: 30.0
-    scan_angle_min: -3.1415
-    scan_angle_max: 3.1415
-    scan_angle_increment: 0.02617
-    scan_use_inf: true
+# loopback_simulator:
+#   ros__parameters:
+#     base_frame_id: "base_link"
+#     odom_frame_id: "odom"
+#     map_frame_id: "m"
+#     scan_frame_id: "base_scan"  # tb4_loopback_simulator.launch.py remaps to 'rplidar_link'
+#     update_duration: 0.02
+#     scan_range_min: 0.05
+#     scan_range_max: 30.0
+#     scan_angle_min: -3.1415
+#     scan_angle_max: 3.1415
+#     scan_angle_increment: 0.02617
+#     scan_use_inf: true
