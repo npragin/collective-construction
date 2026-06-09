@@ -198,6 +198,7 @@ class DetectBlock(Node):
 
                         # self.get_logger().info(f'T_marker_to_robot: {T_marker_to_robot}')
                         dist_to_block = np.hypot(T_marker_to_robot[0].item(), T_marker_to_robot[1].item())
+                        self.get_logger().info(f'distance to block: {dist_to_block}')
                         if dist_to_block > self.max_block_dist:
                             continue
     
