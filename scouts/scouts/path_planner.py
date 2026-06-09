@@ -14,12 +14,9 @@ class Nav2ActionClient(Node):
         self.marker_pub = self.create_publisher(MarkerArray, 'waypoints', 10)
 
         self.points = [
-            (2.0, 7.0), (5.0, 7.0), (5.0, 18.0),
-            (8.0, 18.0), (8.0, 7.0),
-            (11.0, 7.0), (11.0, 18.0),
-            (14.0, 18.0), (14.0, 7.0),
-            (17.0, 2.0), (17.0, 18.0),
-            (20.0, 18.0), (20.0, 2.0),
+            (0.2, 3.0),
+            (1.0, 3.0),
+            (1.0, 0.6),
         ]
         self.last_waypoint_index = -1
 

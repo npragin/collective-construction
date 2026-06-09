@@ -97,26 +97,26 @@ def generate_launch_description():
             }.items(),
         ),
 
-        Node(
-            package='depth_image_proc',
-            executable='point_cloud_xyz_node',
-            name='depth_to_pointcloud',
-            namespace='sierra',
-            parameters=[{'use_sim_time': False}],
-            remappings=[
-                ('image_rect', '/sierra/camera/depth/image_rect_raw'),
-                ('camera_info', '/sierra/camera/depth/camera_info'),
-                ('points', '/sierra/camera/pointcloud'),
-            ]
-        ),
-
         # Node(
-        #     package="scouts",
-        #     executable="detect_block",
-        #     name="detect_block",
-        #     namespace=namespace,
-        #     output="screen",
+        #     package='depth_image_proc',
+        #     executable='point_cloud_xyz_node',
+        #     name='depth_to_pointcloud',
+        #     namespace='sierra',
+        #     parameters=[{'use_sim_time': False}],
+        #     remappings=[
+        #         ('image_rect', '/sierra/camera/depth/image_rect_raw'),
+        #         ('camera_info', '/sierra/camera/depth/camera_info'),
+        #         ('points', '/sierra/camera/pointcloud'),
+        #     ]
         # ),
+
+        Node(
+            package="scouts",
+            executable="detect_block",
+            name="detect_block",
+            namespace=namespace,
+            output="screen",
+        ),
 
         # Node(
         #     package='scouts',
