@@ -58,7 +58,7 @@ class DetectBlock(Node):
             self
         )
 
-        # ignore blocks more then this distance away.
+        # ignore blocks more then this distance away. y
         self.max_block_dist = 2.0
 
         self.marker_pub = self.create_publisher(MarkerArray, 'found_blocks', 10)
