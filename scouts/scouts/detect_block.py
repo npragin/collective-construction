@@ -226,7 +226,7 @@ class DetectBlock(Node):
                             'block_id': candidate_block_id,
                         })
 
-                        continue  # skip the rest, let the timer handle it
+                        continue  # skip the rest, let the timer handle it d
                         
 
                 else:
