@@ -27,7 +27,7 @@ class Nav2ActionClient(Node):
         marker_array = MarkerArray()
         for i, (x, y) in enumerate(self.points):
             marker = Marker()
-            marker.header.frame_id = 'map'
+            marker.header.frame_id = 'world'
             marker.header.stamp = self.get_clock().now().to_msg()
             marker.ns = 'waypoints'
             marker.id = i
@@ -52,7 +52,7 @@ class Nav2ActionClient(Node):
         goal_msg = FollowWaypoints.Goal()
         for x, y in self.points:
             waypoint = PoseStamped()
-            waypoint.header.frame_id = 'map'
+            waypoint.header.frame_id = 'world'
             waypoint.pose.position.x = x
             waypoint.pose.position.y = y
             waypoint.pose.orientation.w = 1.0
