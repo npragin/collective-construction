@@ -186,6 +186,7 @@ class DetectBlock(Node):
                         T_cam_to_robot = np.array(
                             [[-0.1], [0], [0]]
                         )  # camera is 10cm in front of the robot axis
+                        self.get_logger().info(f'tvec: {tvec}')
     
                         T_marker_in_cam = tvec.reshape(3, 1)
                         T_marker_to_robot = (
