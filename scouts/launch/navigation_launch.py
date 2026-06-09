@@ -212,7 +212,8 @@ def generate_launch_description():
                 parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings
-                + [('cmd_vel', 'cmd_vel_nav')],
+                # + [('cmd_vel', 'cmd_vel_nav')],
+                + [('cmd_vel', 'sierra/cmd_vel')], # TODO
             ),
             # Node(
             #     package='nav2_collision_monitor',
