@@ -164,6 +164,7 @@ class DetectBlock(Node):
                 current_ids = set(ids.flatten().tolist())
                 out_of_view_blocks  = self.visible_block_ids - current_ids
                 self.visible_block_ids = current_ids
+                self.get_logger().info(f'visible block ids: {self.visible_block_ids}')
 
                 # if blocks were in view but not anymore, pub them ones that left
                 if out_of_view_blocks:
@@ -294,12 +295,12 @@ class DetectBlock(Node):
         candidate_pose_stamped.pose.orientation.z = z
         candidate_pose_stamped.pose.orientation.w = w
 
-        self.get_logger().info(
-            f'Pose in frame_id aruco_31: '
-            f'x: {candidate_pose_stamped.pose.position.x:.3f}, '
-            f'y: {candidate_pose_stamped.pose.position.y:.3f}, '
-            f'z: {candidate_pose_stamped.pose.position.z:.3f}'
-        )
+        # self.get_logger().info(
+        #     f'Pose in frame_id aruco_31: '
+        #     f'x: {candidate_pose_stamped.pose.position.x:.3f}, '
+        #     f'y: {candidate_pose_stamped.pose.position.y:.3f}, '
+        #     f'z: {candidate_pose_stamped.pose.position.z:.3f}'
+        # )
 
         return candidate_pose_stamped
 
