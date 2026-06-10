@@ -240,7 +240,8 @@ class DetectBlock(Node):
                     if found_block is None:
                         found_block = TrackedBlock(block_id)
                         self.found_blocks.append(found_block)
-                    
+
+                    self.get_logger().info(f'Updating block_id {block_id}')
                     found_block.update(transformed_pose) # alias holds
 
                 except Exception as e:
