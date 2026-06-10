@@ -99,7 +99,7 @@ class DetectBlock(Node):
         self.marker_pub = self.create_publisher(MarkerArray, 'found_blocks', 10)
         self.found_blocks = []
         self.visible_block_ids = set()
-        self.published_block_ids = set()
+        self.published_blocks = []
 
         self.bridge = CvBridge()
 
@@ -216,9 +216,9 @@ class DetectBlock(Node):
                     "No tags detected in the image.", throttle_duration_sec=1.0
                 )
 
-            # out_of_view_blocks = self.visible_block_ids - curr_visible_block_ids
-            # if out_of_view_blocks:
-            #     self.publish_blocks(out_of_view_blocks)
+            out_of_view_blocks = self.visible_block_ids - curr_visible_block_ids
+            if out_of_view_blocks:
+                self.publish_blocks(out_of_view_blocks)
 
             self.visible_block_ids = curr_visible_block_ids.copy()
 
@@ -250,10 +250,6 @@ class DetectBlock(Node):
 
                     # self.get_logger().info(f'Updating block_id {block_id}')
                     found_block.update(transformed_pose) # alias holds
-                    self.get_logger().info(f'Block_id: {block_id} averages {found_block.n} times')
-
-                    if found_block.n > 25 and block_id not in self.published_block_ids:
-                        self.publish_blocks([block_id])
 
                 except Exception as e:
                     self.get_logger().warn(f'Transform failed even after can_transform: {e}')
@@ -266,7 +262,7 @@ class DetectBlock(Node):
         self.get_logger().info(f'pubbing: out_of_view_blocks: {out_of_view_blocks}')
         for pub_block_id in out_of_view_blocks:
             
-            if pub_block_id in self.published_block_ids:
+            if pub_block_id in self.published_blocks:
                 continue
 
             matched_block = None
@@ -289,7 +285,7 @@ class DetectBlock(Node):
 
             self.vis_pub.publish(pub_block)
             self.get_logger().info("publish() returned")
-            self.published_block_ids.add(pub_block_id)
+            self.published_blocks.append(pub_block_id)
 
     def create_pose(self, msg, T_marker_to_robot, R_marker_to_robot):
         candidate_pose_stamped = PoseStamped()
