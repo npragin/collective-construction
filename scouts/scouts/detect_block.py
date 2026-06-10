@@ -168,7 +168,7 @@ class DetectBlock(Node):
                 for i in range(len(ids)):
                     candidate_block_id = ids[i].item()
                     corner = corners[i][0]
-                    # self.get_logger().info(f'id: {candidate_block_id}')
+                    # self.get_logger().info(f'id: {candidate_block_id}') g
 
                     ok, rvec, tvec = cv2.solvePnP(
                         OBJ_PTS,
