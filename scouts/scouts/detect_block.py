@@ -160,15 +160,7 @@ class DetectBlock(Node):
             if ids is not None:
                 self.logger.debug(f"Found {len(ids)} tags: {ids.flatten()}")
 
-                # elements in vis_block_ids but not in ids
-                current_ids = set(ids.flatten().tolist())
-                out_of_view_blocks  = self.visible_block_ids - current_ids
-                self.visible_block_ids = current_ids
-                self.get_logger().info(f'visible block ids: {self.visible_block_ids}')
-
-                # if blocks were in view but not anymore, pub them ones that left
-                if out_of_view_blocks:
-                    self.publish_blocks(out_of_view_blocks)
+                curr_visible_block_ids = set()
 
                 for i in range(len(ids)):
                     candidate_block_id = ids[i].item()
@@ -197,6 +189,9 @@ class DetectBlock(Node):
                     if dist_to_block > self.max_block_dist:
                         continue
 
+                    # only add in the visible blocks below 2m away.
+                    curr_visible_block_ids.update(candidate_block_id)
+
                     self.logger.debug(
                         f"Tag Detected: Marker center is {T_marker_to_robot[0]} m away, "
                         f"{T_marker_to_robot[1]} m to the left, and {T_marker_to_robot[2]} m down)",
@@ -210,7 +205,14 @@ class DetectBlock(Node):
                         'pose': candidate_pose_stamped,
                         'block_id': candidate_block_id,
                     })
-
+                
+                self.get_logger().info(f'visible block ids: {self.visible_block_ids}')
+                
+                out_of_view_blocks  = self.visible_block_ids - curr_visible_block_ids
+                if out_of_view_blocks:
+                    self.publish_blocks(out_of_view_blocks)
+                self.visible_block_ids = curr_visible_block_ids.copy()
+                
             else:
                 self.logger.debug(
                     "No tags detected in the image.", throttle_duration_sec=1.0
