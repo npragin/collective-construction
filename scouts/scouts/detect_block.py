@@ -156,7 +156,7 @@ class DetectBlock(Node):
             corners, ids, _ = cv2.aruco.detectMarkers(
                 cv_image, self.aruco_dict, parameters=self.parameters
             )
-
+            out_of_view_blocks = set()
             if ids is not None:
                 self.logger.debug(f"Found {len(ids)} tags: {ids.flatten()}")
 
@@ -211,12 +211,16 @@ class DetectBlock(Node):
                 out_of_view_blocks  = self.visible_block_ids - curr_visible_block_ids
                 if out_of_view_blocks:
                     self.publish_blocks(out_of_view_blocks)
+                    
                 self.visible_block_ids = curr_visible_block_ids.copy()
                 
             else:
                 self.logger.debug(
                     "No tags detected in the image.", throttle_duration_sec=1.0
                 )
+
+            if out_of_view_blocks:
+                self.publish_blocks(out_of_view_blocks)
 
             self.publish_markers()
 
