@@ -276,7 +276,8 @@ class DetectBlock(Node):
             pub_block.pose = matched_block.get_averaged_pose(self.get_clock().now().to_msg())
 
             self.get_logger().info(f'Publishing block_id: {pub_block_id} at\
-                (x: {pub_block.pose.position.x} y: {pub_block.pose.position.y}) in world frame')
+                (x: {pub_block.pose.pose.position.x} \
+                y: {pub_block.pose.pose.position.y}) in world frame')
 
             self.vis_pub.publish(pub_block)
 
