@@ -90,32 +90,6 @@ class DetectBlock(Node):
     def __init__(self, node_name):
         super().__init__(node_name)
 
-        self.id2type = {
-            0: Block.TYPE_A,
-            1: Block.TYPE_A,
-            2: Block.TYPE_A,
-            3: Block.TYPE_A,
-            4: Block.TYPE_A,
-            5: Block.TYPE_A,
-            # 6: ,
-            # 7: ,
-            # 8: ,
-            # 9: ,
-            10: Block.TYPE_B,
-            11: Block.TYPE_B,
-            12: Block.TYPE_B,
-            13: Block.TYPE_B,
-            # 14: ,
-            # 15: ,
-            # 16: ,
-            # 17: ,
-            # 18: ,
-            # 19: ,
-            20: Block.TYPE_C,
-            21: Block.TYPE_C,
-            22: Block.TYPE_C,
-
-        }
 
         self.get_logger().info('DetectBlock Node is Up!')
 
@@ -293,12 +267,7 @@ class DetectBlock(Node):
                 continue
 
             pub_block = Block()
-            block_type = self.id2type.get(block.block_id, None)
-            if block_type is None:
-                self.get_logger().info(f'block_id: {block.block_id} type is unknown. Not publishing')
-                continue
-
-            pub_block.type = block_type 
+            pub_block.type = Block.TYPE_A # TODO need to change
             pub_block.pose = block.get_averaged_pose(self.get_clock().now().to_msg())
 
             self.get_logger().info(f'Publishing block_id: {block.block_id} at\
