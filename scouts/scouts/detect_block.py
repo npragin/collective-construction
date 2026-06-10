@@ -90,6 +90,33 @@ class DetectBlock(Node):
     def __init__(self, node_name):
         super().__init__(node_name)
 
+        self.id2block = {
+            0: 'A',
+            1: 'A',
+            2: 'A',
+            3: 'A',
+            4: 'A',
+            5: 'A',
+            # 6: ,
+            # 7: ,
+            # 8: ,
+            # 9: ,
+            10: 'B',
+            11: 'B',
+            12: 'B',
+            13: 'B',
+            # 14: ,
+            # 15: ,
+            # 16: ,
+            # 17: ,
+            # 18: ,
+            # 19: ,
+            20: 'C',
+            21: 'C',
+            22: 'C',
+
+        }
+
         self.get_logger().info('DetectBlock Node is Up!')
 
         self.tf_buffer = Buffer()
@@ -100,7 +127,7 @@ class DetectBlock(Node):
         self.marker_pub = self.create_publisher(MarkerArray, 'found_blocks', 10)
         self.found_blocks = [] # every seen block, ever
         self.visible_block_ids = set() # block ids robot can visually see
-        self.published_blocks = [] # blocks actually published
+        self.published_blocks = [] # blocks actually published f
 
         self.bridge = CvBridge()
 
