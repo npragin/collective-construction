@@ -241,7 +241,7 @@ class DetectBlock(Node):
                             break
 
                     if found_block is None:
-                        found_block = TrackedBlock(block_id, self.get_clock().now().to_msg())
+                        found_block = TrackedBlock(block_id, self.get_clock().now())
                         self.found_blocks.append(found_block)
 
                     # self.get_logger().info(f'Updating block_id {block_id}')
