@@ -284,7 +284,7 @@ class DetectBlock(Node):
                 y: {pub_block.pose.pose.position.y}) in world frame')
 
             self.vis_pub.publish(pub_block)
-
+            self.get_logger().info("publish() returned")
             self.published_blocks.append(pub_block_id)
 
     def create_pose(self, msg, T_marker_to_robot, R_marker_to_robot):
