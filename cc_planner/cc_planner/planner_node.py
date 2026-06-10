@@ -13,6 +13,7 @@ import rclpy
 import rclpy.duration
 import rclpy.time
 import tf2_ros
+import tf2_geometry_msgs  # noqa: F401  # registers PoseStamped transform handlers
 from cc_interfaces.action import ManipulationTask, RetrievalTask
 from cc_interfaces.msg import Block, Stockpiles, StructurePlan
 from geometry_msgs.msg import Polygon, PolygonStamped, PoseStamped
@@ -171,6 +172,10 @@ class PlannerNode(Node):
     def _on_scout_report(self, msg: Block) -> None:
         """Record a scout-reported block; bind its type to a stockpile if not yet bound."""
         block = msg
+        self.get_logger().info(
+            f"Scout report: block type {block.type} at "
+            f"({block.pose.pose.position.x:.3f}, {block.pose.pose.position.y:.3f})"
+        )
         if block.type not in self.type_to_stockpile:
             tag_id = self._choose_closest_unassigned_stockpile(
                 block.pose.pose.position.x,
@@ -298,6 +303,28 @@ class PlannerNode(Node):
             return None
         t = tf.transform.translation
         return (t.x, t.y)
+
+    def _transform_pose_to_world(self, pose: PoseStamped) -> PoseStamped | None:
+        """
+        Transform a PoseStamped into self._world_frame via TF.
+
+        Returns None on TransformException. The returned PoseStamped has
+        header.frame_id == self._world_frame (asserted to document the
+        contract; tf2 sets this on success).
+        """
+        try:
+            out = self._tf_buffer.transform(
+                pose,
+                self._world_frame,
+                timeout=rclpy.duration.Duration(seconds=self._tf_lookup_timeout),
+            )
+        except TransformException as exc:
+            self.get_logger().debug(
+                f"TF transform {pose.header.frame_id}->{self._world_frame} failed: {exc}"
+            )
+            return None
+        assert out.header.frame_id == self._world_frame
+        return out
 
     def _send_retrieval_task(self, robot_id: str, block: Block, stockpile: PolygonStamped) -> bool:
         """Dispatch a retrieval goal. Returns True on send, False if the server is not ready."""
@@ -582,9 +609,19 @@ class PlannerNode(Node):
             block_type = block_node["block_type"]
             stockpile = self.stockpiles[self.type_to_stockpile[block_type]]
 
+            world_pose = self._transform_pose_to_world(block_node["pose"])
+            if world_pose is None:
+                self.get_logger().warn(
+                    f"Skipping manipulation allocation for {robot_id}: TF transform "
+                    f"'{self._build_frame}' -> '{self._world_frame}' failed for block "
+                    f"{block_id}; releasing reservation"
+                )
+                self._release_placeable_block(block_id)
+                continue
+
             block = Block()
             block.type = block_type
-            block.pose = block_node["pose"]
+            block.pose = world_pose
 
             self.manipulation_in_flight[robot_id] = block_id
 
