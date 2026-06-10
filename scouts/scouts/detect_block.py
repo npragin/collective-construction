@@ -209,7 +209,7 @@ class DetectBlock(Node):
                             break
                             
                 
-                self.get_logger().info(f'visible block ids: {self.curr_visible_block_ids}')
+                self.get_logger().info(f'visible block ids: {curr_visible_block_ids}')
                 
             else:
                 self.logger.debug(
