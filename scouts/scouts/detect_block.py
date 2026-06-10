@@ -250,9 +250,11 @@ class DetectBlock(Node):
 
                     # self.get_logger().info(f'Updating block_id {block_id}')
                     found_block.update(transformed_pose) # alias holds
-                    self.get_logger().info(f'Block_id: {block_id} averages {found_block.n} times')
 
-                    if found_block.n > 15 and block_id not in self.published_block_ids:
+                    if found_block.n <= 15:
+                        self.get_logger().info(f'Block_id: {block_id} averages {found_block.n} times')
+
+                    if found_block.n == 15 and block_id not in self.published_block_ids:
                         self.publish_blocks([block_id])
 
                 except Exception as e:
