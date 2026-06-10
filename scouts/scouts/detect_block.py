@@ -157,10 +157,11 @@ class DetectBlock(Node):
                 cv_image, self.aruco_dict, parameters=self.parameters
             )
             out_of_view_blocks = set()
+            curr_visible_block_ids = set()
+            
             if ids is not None:
                 self.logger.debug(f"Found {len(ids)} tags: {ids.flatten()}")
 
-                curr_visible_block_ids = set()
 
                 for i in range(len(ids)):
                     candidate_block_id = ids[i].item()
@@ -208,20 +209,18 @@ class DetectBlock(Node):
                 
                 self.get_logger().info(f'visible block ids: {self.visible_block_ids}')
                 
-                out_of_view_blocks  = self.visible_block_ids - curr_visible_block_ids
-                if out_of_view_blocks:
-                    self.publish_blocks(out_of_view_blocks)
 
-                self.visible_block_ids = curr_visible_block_ids.copy()
                 
             else:
                 self.logger.debug(
                     "No tags detected in the image.", throttle_duration_sec=1.0
                 )
 
-            self.get_logger().info(f'out_of_view_blocks: {out_of_view_blocks}')
+            out_of_view_blocks = self.visible_block_ids - curr_visible_block_ids
             if out_of_view_blocks:
                 self.publish_blocks(out_of_view_blocks)
+
+            self.visible_block_ids = curr_visible_block_ids.copy()
 
             self.publish_markers()
 
