@@ -1,3 +1,5 @@
+import time
+
 import numpy
 from enum import Enum, auto
 import asyncio
@@ -185,11 +187,11 @@ class RobotFSM(Node):
 
 
 
-        self.x_offset = -0.485 #meters
-        self.y_offset = 0.0 #meters
+        self.x_offset = -0.45 #meters
+        self.y_offset = 0.00 #meters
 
     async def detect_blocks(self):
-        attempts = 3   # initial try + 2 retries
+        attempts = 5   # initial try + 2 retries
         for attempt in range(attempts):
             block_request = DetectMarkers.Request()
             block_request.target_id = -1
@@ -337,6 +339,7 @@ class RobotFSM(Node):
         if not success:
             return False
         
+        time.sleep(2)
         
         # Detect block
         self.state = State.DETECT_BLOCK
@@ -355,7 +358,11 @@ class RobotFSM(Node):
         # navigate to drop off
 
         self.state = State.NAVIGATE_TO_DROPOFF
-        dropoff_offset = self.offset_pose(dropoff_pose, self.x_offset, self.y_offset)
+        dropoff_offset = self.offset_pose(dropoff_pose, self.x_offset, 0.0)
+        dropoff_offset.pose.orientation.x = 0.0
+        dropoff_offset.pose.orientation.y = 0.0
+        dropoff_offset.pose.orientation.z = 0.0
+        dropoff_offset.pose.orientation.w = 1.0
         success = await self.navigate_to_pose(dropoff_offset)
 
         if not success:
@@ -422,7 +429,7 @@ class RobotFSM(Node):
         
         # move to the detected block pose (arm_0_base_link frame, gripper down)
         pick_pose_grasp = copy.deepcopy(pick_pose)
-        pick_pose_grasp.pose.position.z = -0.12
+        pick_pose_grasp.pose.position.z = -0.13
 
         success = await self.manipulator.move_to_pose(pick_pose_grasp)
 
@@ -478,7 +485,7 @@ class RobotFSM(Node):
         px = place_pose.pose.position.x
         py = place_pose.pose.position.y
         place_pose.pose.position.x = min(max(px, 0.35), 0.45)
-        place_pose.pose.position.y = min(max(py, -0.05), 0.05)
+        place_pose.pose.position.y = min(max(py, -0.20), 0.20)
         if (place_pose.pose.position.x, place_pose.pose.position.y) != (px, py):
             self.get_logger().warn(
                 f'Clipped place target ({px:.3f}, {py:.3f}) -> '
