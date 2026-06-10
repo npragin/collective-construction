@@ -38,7 +38,7 @@ class TrackedBlock():
     Tracks a block currently in view.
     Accumulates a running average of its world-frame position.
     """
-    def __init__(self, block_id, time):
+    def __init__(self, block_id):
         self.block_id = block_id
         self.avg_x = 0.0
         self.avg_y = 0.0
@@ -48,7 +48,6 @@ class TrackedBlock():
         self.avg_qz = 0.0
         self.avg_qw = 1.0
         self.n = 0  # number of samples accumulated
-        self.time_seen = time
 
     def update(self, world_pose: PoseStamped):
         """Incremental moving average of position and orientation."""
@@ -98,9 +97,9 @@ class DetectBlock(Node):
         self.max_block_dist = 2.0
 
         self.marker_pub = self.create_publisher(MarkerArray, 'found_blocks', 10)
-        self.found_blocks = [] # every seen block, ever
-        self.visible_block_ids = set() # block ids robot can visually see
-        self.published_blocks = [] # blocks actually published
+        self.found_blocks = []
+        self.visible_block_ids = set()
+        self.published_block_ids = set()
 
         self.bridge = CvBridge()
 
@@ -136,13 +135,9 @@ class DetectBlock(Node):
         self.logger = self.get_logger()
         self.logger.info(f"Launched Block Detection Node for {self.get_namespace()}")
 
-        self.create_timer(0.5, self.publish_blocks)
-
-
     def cam_callback(self, img_msg, cam_info_msg):
         self.camera_info_callback(cam_info_msg)
         self.image_callback(img_msg)
-
 
     def camera_info_callback(self, msg):
         if self.camera_matrix is not None and self.distortion_coeffs is not None:
@@ -150,20 +145,23 @@ class DetectBlock(Node):
         self.camera_matrix = np.array(msg.k).reshape(3, 3)
         self.distortion_coeffs = np.array(msg.d)
 
-
     def image_callback(self, msg):
         try:
             if self.camera_matrix is None or self.distortion_coeffs is None:
                 self.logger.warn("Camera info not received yet.")
                 return
+
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+
             corners, ids, _ = cv2.aruco.detectMarkers(
                 cv_image, self.aruco_dict, parameters=self.parameters
             )
+            out_of_view_blocks = set()
             curr_visible_block_ids = set()
 
             if ids is not None:
                 self.logger.debug(f"Found {len(ids)} tags: {ids.flatten()}")
+
 
                 for i in range(len(ids)):
                     candidate_block_id = ids[i].item()
@@ -195,6 +193,12 @@ class DetectBlock(Node):
                     # only add in the visible blocks below 2m away.
                     curr_visible_block_ids.add(candidate_block_id)
 
+                    self.logger.debug(
+                        f"Tag Detected: Marker center is {T_marker_to_robot[0]} m away, "
+                        f"{T_marker_to_robot[1]} m to the left, and {T_marker_to_robot[2]} m down)",
+                        throttle_duration_sec=1.0,
+                    )
+
                     candidate_pose_stamped = self.create_pose(msg, T_marker_to_robot, R_marker_to_robot)
 
                     self.detection_queue.append({
@@ -202,19 +206,19 @@ class DetectBlock(Node):
                         'pose': candidate_pose_stamped,
                         'block_id': candidate_block_id,
                     })
-
-                    for block in self.found_blocks:
-                        if block.block_id == candidate_block_id:
-                            block.time_seen = self.get_clock().now()
-                            break
-                            
                 
-                self.get_logger().info(f'visible block ids: {self.curr_visible_block_ids}')
+                self.get_logger().info(f'visible block ids: {self.visible_block_ids}')
+                
+
                 
             else:
                 self.logger.debug(
                     "No tags detected in the image.", throttle_duration_sec=1.0
                 )
+
+            # out_of_view_blocks = self.visible_block_ids - curr_visible_block_ids
+            # if out_of_view_blocks:
+            #     self.publish_blocks(out_of_view_blocks)
 
             self.visible_block_ids = curr_visible_block_ids.copy()
 
@@ -241,11 +245,17 @@ class DetectBlock(Node):
                             break
 
                     if found_block is None:
-                        found_block = TrackedBlock(block_id, self.get_clock().now().to_msg())
+                        found_block = TrackedBlock(block_id)
                         self.found_blocks.append(found_block)
 
                     # self.get_logger().info(f'Updating block_id {block_id}')
                     found_block.update(transformed_pose) # alias holds
+
+                    if found_block.n <= 15:
+                        self.get_logger().info(f'Block_id: {block_id} averages {found_block.n} times')
+
+                    if found_block.n == 15 and block_id not in self.published_block_ids:
+                        self.publish_blocks([block_id])
 
                 except Exception as e:
                     self.get_logger().warn(f'Transform failed even after can_transform: {e}')
@@ -254,26 +264,34 @@ class DetectBlock(Node):
 
         self.detection_queue = still_pending
 
-
-    def publish_blocks(self):
-        for block in self.found_blocks:
-
-            if block.block_id in self.published_blocks:
+    def publish_blocks(self, out_of_view_blocks):
+        self.get_logger().info(f'pubbing: out_of_view_blocks: {out_of_view_blocks}')
+        for pub_block_id in out_of_view_blocks:
+            
+            if pub_block_id in self.published_block_ids:
                 continue
 
-            dt = (self.get_clock().now() - block.time_seen).nanoseconds / 1e9 # seconds
-            if dt < 2: # 2 seconds
-                continue
+            matched_block = None
+            for found_block in self.found_blocks:
+                if found_block.block_id == pub_block_id:
+                    matched_block = found_block
+                    break
 
+            if matched_block is None:
+                self.get_logger().info(f'block_id: {pub_block_id} became out-of-sight before transform and saving to found_block list took place')
+                continue
+    
             pub_block = Block()
             pub_block.type = Block.TYPE_B # TODO need to properly map
-            pub_block.pose = block.get_averaged_pose(self.get_clock().now().to_msg())
+            pub_block.pose = matched_block.get_averaged_pose(self.get_clock().now().to_msg())
 
-            self.get_logger().info(f'Publishing block_id: {block.block_id} at\
+            self.get_logger().info(f'Publishing block_id: {pub_block_id} at\
                 (x: {pub_block.pose.pose.position.x} \
                 y: {pub_block.pose.pose.position.y}) in world frame')
+
             self.vis_pub.publish(pub_block)
-            self.published_blocks.append(block.block_id)
+            self.get_logger().info("publish() returned")
+            self.published_block_ids.add(pub_block_id)
 
     def create_pose(self, msg, T_marker_to_robot, R_marker_to_robot):
         candidate_pose_stamped = PoseStamped()
