@@ -228,7 +228,6 @@ class DetectBlock(Node):
             self.logger.error(f"Error converting image: {e}")
 
     def process_detection_queue(self):
-        self.get_logger().info('in publish blocks)')
         still_pending = deque()
         for detection in self.detection_queue:
             stamp = detection['stamp']
@@ -260,6 +259,7 @@ class DetectBlock(Node):
         self.detection_queue = still_pending
 
     def publish_blocks(self, out_of_view_blocks):
+        self.get_logger().info('in publish blocks)')
         for pub_block_id in out_of_view_blocks:
             
             if pub_block_id in self.published_blocks:
