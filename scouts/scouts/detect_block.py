@@ -244,7 +244,7 @@ class DetectBlock(Node):
                         found_block = TrackedBlock(block_id)
                         self.found_blocks.append(found_block)
 
-                    self.get_logger().info(f'Updating block_id {block_id}')
+                    # self.get_logger().info(f'Updating block_id {block_id}')
                     found_block.update(transformed_pose) # alias holds
 
                 except Exception as e:
@@ -270,7 +270,6 @@ class DetectBlock(Node):
                 self.get_logger().info(f'block_id: {pub_block_id} became out-of-sight before transform and saving to found_block list took place')
                 continue
     
-
             pub_block = Block()
             pub_block.type = Block.TYPE_B # TODO need to properly map
             pub_block.pose = matched_block.get_averaged_pose(self.get_clock().now().to_msg())
