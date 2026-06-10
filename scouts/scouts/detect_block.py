@@ -211,7 +211,7 @@ class DetectBlock(Node):
                 out_of_view_blocks  = self.visible_block_ids - curr_visible_block_ids
                 if out_of_view_blocks:
                     self.publish_blocks(out_of_view_blocks)
-                    
+
                 self.visible_block_ids = curr_visible_block_ids.copy()
                 
             else:
@@ -228,6 +228,7 @@ class DetectBlock(Node):
             self.logger.error(f"Error converting image: {e}")
 
     def process_detection_queue(self):
+        self.get_logger().info('in publish blocks)')
         still_pending = deque()
         for detection in self.detection_queue:
             stamp = detection['stamp']
