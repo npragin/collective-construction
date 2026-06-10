@@ -26,8 +26,8 @@ class TestFSM(Node):
         self.pick.pose.position.y = 1.0
         self.pick.pose.orientation.x = 0.0
         self.pick.pose.orientation.y = 0.0
-        self.pick.pose.orientation.z = 0.8939967
-        self.pick.pose.orientation.w = -0.4480736  # Facing forward
+        self.pick.pose.orientation.z = 1.0
+        self.pick.pose.orientation.w = 0.0  # Facing forward
 
         self.place = PoseStamped()
         self.place.header.frame_id = 'world'
