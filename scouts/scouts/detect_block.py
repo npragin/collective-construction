@@ -261,7 +261,7 @@ class DetectBlock(Node):
             if block.block_id in self.published_blocks:
                 continue
 
-            dt = (self.get_clock().now() - block.time_seen).nanoseconds / 1e9 # seconds
+            dt = (self.get_clock().now().nanoseconds - block.time_seen.nanoseconds) / 1e9 # seconds
             if dt < 2: # 2 seconds
                 continue
 
