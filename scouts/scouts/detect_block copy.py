@@ -1,3 +1,5 @@
+
+
 import rclpy
 from rclpy.node import Node
 
@@ -23,11 +25,18 @@ import tf2_geometry_msgs
 
 from visualization_msgs.msg import Marker, MarkerArray
 
+from collections import deque
+
 """
-This code was developed by Zane and Atharv and edited slightly by Liam
+while block is in camera frame, continuously avg it out
+if block is no longer in camera frame, publish the average
+
+list to hold the within max distance block ids
+
 """
 
 # MARKER_SIZE = 0.043
+# MARKER_SIZE = 0.048
 MARKER_SIZE = 0.055
 OBJ_PTS = np.array(
     [
@@ -54,10 +63,14 @@ class DetectBlock(Node):
             self
         )
 
+        # ignore blocks more then this distance away. 
+        self.max_block_dist = 2.0
+
         self.marker_pub = self.create_publisher(MarkerArray, 'found_blocks', 10)
         self.found_blocks = []
+        self.curr_visible_blocks = [] # within the max_block_dist
 
-        self.bridge = CvBridge() # converts between ros2 image messages and openCV images
+        self.bridge = CvBridge() # converts between ros2 image messages and openCV images w
 
         # publishes the visible block poses to the central planner
         self.vis_pub = self.create_publisher(
@@ -91,6 +104,9 @@ class DetectBlock(Node):
         self.ts = message_filters.ApproximateTimeSynchronizer(
             [self.color_sub, self.color_info], queue_size, slop
         )
+
+        self.detection_queue = deque(maxlen=20)
+        self.create_timer(0.05, self.process_detection_queue)  # drain queue every 50ms
 
         # callback that happens when synced messages come from above
         self.ts.registerCallback(self.cam_callback)
@@ -134,6 +150,7 @@ class DetectBlock(Node):
             if ids is not None:
                 
                 self.logger.debug(f"Found {len(ids)} tags: {ids.flatten()}")
+
                 for i in range(len(ids)):
                         
                     candidate_block_id = ids[i].item()
@@ -169,12 +186,7 @@ class DetectBlock(Node):
                                 [0, -1, 0],
                             ]
                         )
-    
-                        # this code accounts for the retriever camera pointing 30 degrees down.
-                        # R_cam_angle_to_robot = create_rotation_matrix(
-                        #     pitch=30, units="degrees"
-                        # )
-                        # R_cam_to_robot = R_cam_angle_to_robot @ R_image_to_robot_axes
+
                         R_cam_to_robot = R_image_to_robot_axes
     
     
@@ -184,12 +196,22 @@ class DetectBlock(Node):
                         T_cam_to_robot = np.array(
                             [[-0.1], [0], [0]]
                         )  # camera is 10cm in front of the robot axis
+                        # self.get_logger().info(f'tvec: {tvec}')
     
                         T_marker_in_cam = tvec.reshape(3, 1)
                         T_marker_to_robot = (
                             R_cam_to_robot @ T_marker_in_cam + T_cam_to_robot
                         )
-    
+
+                        # self.get_logger().info(f'T_marker_to_robot: {T_marker_to_robot}')
+                        dist_to_block = np.hypot(T_marker_to_robot[0].item(), T_marker_to_robot[1].item())
+                        self.get_logger().info(f'distance to block: {dist_to_block}')
+                        if dist_to_block > self.max_block_dist:
+                            continue
+
+                        # if candidate_block_id not in self.curr_visible_blocks:
+                        #     self.curr_visible_blocks.append(candidate_block_id)
+
                         self.logger.debug(
                             f"Tag Detected: Marker center is {T_marker_to_robot[0]} m away,  {T_marker_to_robot[1]} m to the left, and {T_marker_to_robot[2]} m down)",
                             throttle_duration_sec=1.0,
@@ -198,8 +220,8 @@ class DetectBlock(Node):
                         candidate_pose_stamped = PoseStamped()
                         # candidate_pose_stamped.header.frame_id = f'{self.get_namespace()}/aruco_31'[1:]
                         candidate_pose_stamped.header.frame_id = 'aruco_31'
-                        # candidate_pose_stamped.header.stamp = msg.header.stamp
                         # candidate_pose_stamped.header.frame_id = 'sierra/base_link'
+                        candidate_pose_stamped.header.stamp = msg.header.stamp
 
                         candidate_pose_stamped.pose.position.x = float(T_marker_to_robot[0])
                         candidate_pose_stamped.pose.position.y = float(T_marker_to_robot[1])
@@ -216,41 +238,16 @@ class DetectBlock(Node):
                             y: {candidate_pose_stamped.pose.position.y}, \
                             z: {candidate_pose_stamped.pose.position.z}')
     
-                        
-                        candidate_pose_stamped = self.tf_buffer.transform(
-                            candidate_pose_stamped,
-                            'world'
-                        )
-    
-                        # self.get_logger().info(f'Pose in frame_id world:  \
-                        #     x: {candidate_pose_stamped.pose.position.x}, \
-                        #     y: {candidate_pose_stamped.pose.position.y}, \
-                        #     z: {candidate_pose_stamped.pose.position.z}')
-    
-                        candidate_block = Block()
-                        candidate_block.type = Block.TYPE_B # TODO this is just an examples, need to change
 
-                        candidate_block.pose = candidate_pose_stamped
-    
-                        # check to see if this is a duplicate block
-                        duplicate = False
-                        for found_block, found_id in self.found_blocks:   
-                            if found_id == candidate_block_id:
-                                found_block.pose = candidate_pose_stamped
-                                self.get_logger().info(f'Block {candidate_block_id} is a duplicate')
-                                duplicate = True
+                        # replace the tf_buffer.transform() call with this
+                        self.detection_queue.append({
+                            'stamp': msg.header.stamp,
+                            'pose': candidate_pose_stamped,
+                            'block_id': candidate_block_id,
+                        })
 
-                        if duplicate:
-                            continue
+                        continue  # skip the rest, let the timer handle it d
                         
-                        # this a new block
-                        self.found_blocks.append((candidate_block, candidate_block_id))
-                        
-                        # publish the newly found block
-                        self.vis_pub.publish(candidate_block) 
-    
-                        # publish markes of blocks for rviz
-                        self.publish_markers()
 
                 else:
                     self.logger.debug(
@@ -266,29 +263,46 @@ class DetectBlock(Node):
             # publish markes of blocks for rviz
             self.publish_markers()
 
-            # if not pose_status.tag_in_frame:
-            #     pose_status.block_in_frame, x, y = self.segment_color(
-            #         cv_image
-            #     )  # if no tags are detected, try to segment based on color as a fallback
-            #     if pose_status.block_in_frame:
-            #         # create a fake pose with a y position scaled based on the negative x value of the image. Make a rough x pose based on y in frame
-            #         pose_status.pose.position.x = 0.5 + max(
-            #             min(-0.001 * (y - cv_image.shape[0] / 2), 0.5), -0.5
-            #         )
-            #         pose_status.pose.position.y = max(
-            #             min(-0.001 * (x - cv_image.shape[1] / 2), 0.5), -0.5
-            #         )
-            #         pose_status.pose.position.z = 0.0
-            #         pose_status.pose.orientation.w = 1.0
-            #         self.logger.debug(
-            #             f"Tag not detected, using color segmentation. Estimated pose: ({pose_status.pose.position.x}, {pose_status.pose.position.y}, {pose_status.pose.position.z})",
-            #             throttle_duration_sec=1.0,
-            #         )
-
-            # self.vis_pub.publish(pose_status)
 
         except Exception as e:
             self.logger.error(f"Error converting image: {e}")
+
+
+    def process_detection_queue(self):
+        still_pending = deque()
+        for detection in self.detection_queue:
+            stamp = detection['stamp']
+            pose = detection['pose']
+            block_id = detection['block_id']
+    
+            # if self.tf_buffer.can_transform('world', 'sierra/base_link', stamp):
+            if self.tf_buffer.can_transform('world', 'aruco_31', stamp):
+
+                try:
+                    transformed_pose = self.tf_buffer.transform(pose, 'world')
+    
+                    candidate_block = Block()
+                    candidate_block.type = Block.TYPE_B
+                    candidate_block.pose = transformed_pose
+    
+                    duplicate = False
+                    for found_block, found_id in self.found_blocks:
+                        if found_id == block_id:
+                            found_block.pose = transformed_pose
+                            duplicate = True
+    
+                    if not duplicate:
+                        self.found_blocks.append((candidate_block, block_id))
+                        self.vis_pub.publish(candidate_block)
+                        self.publish_markers()
+    
+                except Exception as e:
+                    self.get_logger().warn(f'Transform failed even after can_transform: {e}')
+            else:
+                still_pending.append(detection)  # TF not here yet, try again next timer tick
+    
+        self.detection_queue = still_pending
+
 
     def publish_markers(self):
         marker_array = MarkerArray()
@@ -312,33 +326,6 @@ class DetectBlock(Node):
             marker.color.a = 1.0
             marker_array.markers.append(marker)
         self.marker_pub.publish(marker_array)
-
-
-    # def segment_color(self, cv_image):
-    #         # Convert the image to HSV color space for better color segmentation
-    #         hsv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
-
-    #         # Define the lower and upper bounds for the block's color in HSV space
-    #         # do orange instead
-    #         lower_color = np.array([2, 100, 100])  # lower bound (orange color)
-    #         upper_color = np.array([10, 255, 255])  # Example upper
-
-    #         # Create a mask using the defined color bounds
-    #         mask = cv2.inRange(hsv_image, lower_color, upper_color)
-
-    #         # Find contours in the mask
-    #         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    #         if contours:
-    #             largest_contour = max(contours, key=cv2.contourArea)
-    #             M = cv2.moments(largest_contour)
-    #             if M["m00"] > 50:
-    #                 cX = int(M["m10"] / M["m00"])
-    #                 cY = int(M["m01"] / M["m00"])
-    #                 self.logger.debug(f"Segmented block at pixel coordinates: ({cX}, {cY})")
-    #                 return True, cX, cY
-    #         return False, None, None
-
 
 
 def main(args=None):

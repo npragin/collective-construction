@@ -1,5 +1,3 @@
-
-
 import rclpy
 from rclpy.node import Node
 
@@ -8,9 +6,6 @@ from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import Twist, Pose, PoseStamped
 from cv_bridge import CvBridge
 import cv2
-# from retriever_robots.utils import create_rotation_matrix
-
-# from retriever_msgs.msg import PoseStatus
 
 from block_interfaces.msg import BlockPose
 from cc_interfaces.msg import Block
@@ -27,12 +22,6 @@ from visualization_msgs.msg import Marker, MarkerArray
 
 from collections import deque
 
-"""
-This code was developed by Zane and Atharv and edited slightly by Liam
-"""
-
-# MARKER_SIZE = 0.043
-# MARKER_SIZE = 0.048
 MARKER_SIZE = 0.055
 OBJ_PTS = np.array(
     [
@@ -44,6 +33,56 @@ OBJ_PTS = np.array(
     dtype=np.float64,
 )
 
+class TrackedBlock():
+    """
+    Tracks a block currently in view.
+    Accumulates a running average of its world-frame position.
+    """
+    def __init__(self, block_id):
+        self.block_id = block_id
+        self.avg_x = 0.0
+        self.avg_y = 0.0
+        self.avg_z = 0.0
+        self.avg_qx = 0.0
+        self.avg_qy = 0.0
+        self.avg_qz = 0.0
+        self.avg_qw = 1.0
+        self.n = 0  # number of samples accumulated
+
+    def update(self, world_pose: PoseStamped):
+        """Incremental moving average of position and orientation."""
+        self.n += 1
+        p = world_pose.pose.position
+        o = world_pose.pose.orientation
+
+        self.avg_x += (p.x - self.avg_x) / self.n
+        self.avg_y += (p.y - self.avg_y) / self.n
+        self.avg_z += (p.z - self.avg_z) / self.n
+
+        self.avg_qx += (o.x - self.avg_qx) / self.n
+        self.avg_qy += (o.y - self.avg_qy) / self.n
+        self.avg_qz += (o.z - self.avg_qz) / self.n
+        self.avg_qw += (o.w - self.avg_qw) / self.n
+
+    def get_averaged_pose(self, time, frame_id='world') -> PoseStamped:
+        """Return the current moving average as a PoseStamped."""
+        ps = PoseStamped()
+        ps.header.frame_id = frame_id
+        ps.header.stamp = time
+        ps.pose.position.x = self.avg_x
+        ps.pose.position.y = self.avg_y
+        ps.pose.position.z = self.avg_z
+
+        # renormalize quaternion
+        q = np.array([self.avg_qx, self.avg_qy, self.avg_qz, self.avg_qw])
+        norm = np.linalg.norm(q)
+        if norm > 1e-6:
+            q /= norm
+        ps.pose.orientation.x = q[0]
+        ps.pose.orientation.y = q[1]
+        ps.pose.orientation.z = q[2]
+        ps.pose.orientation.w = q[3]
+        return ps
 
 class DetectBlock(Node):
 
@@ -53,57 +92,44 @@ class DetectBlock(Node):
         self.get_logger().info('DetectBlock Node is Up!')
 
         self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        self.tf_listener = TransformListener(
-            self.tf_buffer,
-            self
-        )
-
-        # ignore blocks more then this distance away. 
         self.max_block_dist = 2.0
 
         self.marker_pub = self.create_publisher(MarkerArray, 'found_blocks', 10)
         self.found_blocks = []
+        self.visible_block_ids = set()
+        self.published_blocks = []
 
-        self.bridge = CvBridge() # converts between ros2 image messages and openCV images w
+        self.bridge = CvBridge()
 
-        # publishes the visible block poses to the central planner
         self.vis_pub = self.create_publisher(
-            # BlockPose, f"{self.get_namespace()}/scout_report", 10
             Block, f"{self.get_namespace()}/scout_report", 10
         )
 
-        # describe how a real camera converts 3D poitns into image pizels
         self.camera_matrix = None
         self.distortion_coeffs = None
 
-        # self.aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_APRILTAG_25h9)
         self.aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_APRILTAG_16h5)
         self.parameters = cv2.aruco.DetectorParameters_create()
 
-        # gets actual rgb image
         self.color_sub = message_filters.Subscriber(
             self, Image, f"{self.get_namespace()}/camera/color/image_raw"
         )
-        # camera calibration params
         self.color_info = message_filters.Subscriber(
-            self,
-            CameraInfo,
-            f"{self.get_namespace()}/camera/color/camera_info",
+            self, CameraInfo, f"{self.get_namespace()}/camera/color/camera_info",
         )
 
         queue_size = 1
         slop = 0.2
 
-        # waits until it finds messages from multiple topics within a close enough time stamp, then passes it through the callback on next line
         self.ts = message_filters.ApproximateTimeSynchronizer(
             [self.color_sub, self.color_info], queue_size, slop
         )
 
         self.detection_queue = deque(maxlen=20)
-        self.create_timer(0.05, self.process_detection_queue)  # drain queue every 50ms
+        self.create_timer(0.05, self.process_detection_queue)
 
-        # callback that happens when synced messages come from above
         self.ts.registerCallback(self.cam_callback)
 
         self.logger = self.get_logger()
@@ -113,7 +139,6 @@ class DetectBlock(Node):
         self.camera_info_callback(cam_info_msg)
         self.image_callback(img_msg)
 
-    
     def camera_info_callback(self, msg):
         if self.camera_matrix is not None and self.distortion_coeffs is not None:
             return
@@ -121,143 +146,79 @@ class DetectBlock(Node):
         self.distortion_coeffs = np.array(msg.d)
 
     def image_callback(self, msg):
-        
-        # TODO swap this with map possible map -> base_link
-        # pose_status = PoseStatus()
-        # pose_status.tag_in_frame = False
         try:
             if self.camera_matrix is None or self.distortion_coeffs is None:
                 self.logger.warn("Camera info not received yet.")
                 return
 
-            # converts ros message of image to cv image
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
 
-            # inputs: (image, dict) -> outputs: (list of corner coords)
             corners, ids, _ = cv2.aruco.detectMarkers(
                 cv_image, self.aruco_dict, parameters=self.parameters
             )
 
-            # self.get_logger().info(f'ids: {ids}')
-            # self.get_logger().info(f'corners: {corners}')
-
-            # if there exists atleast one marker
             if ids is not None:
-                
                 self.logger.debug(f"Found {len(ids)} tags: {ids.flatten()}")
+
+                # elements in vis_block_ids but not in ids
+                current_ids = set(ids.flatten().tolist())
+                out_of_view_blocks  = self.visible_block_ids - current_ids
+                self.visible_block_ids = current_ids
+
+                # if blocks were in view but not anymore, pub them ones that left
+                if out_of_view_blocks:
+                    self.publish_blocks(out_of_view_blocks)
+
                 for i in range(len(ids)):
-                        
                     candidate_block_id = ids[i].item()
                     corner = corners[i][0]
                     self.get_logger().info(f'id: {candidate_block_id}')
-    
-                    # input (3D points like tag 4 corners , 2D corre. projections in image)
-                    # output (rot vector and translation of the camera)
-    
-                    # both of these are w.r.t to the camera.
-                    # rvec: rotation vector. ex: [0, 0, 1.5] -> rotate around z axis by 1.5 radians
-                    # tvec: translation vector. ex: [1,2,3] -> object  is 1m on x, 2m on y, and 3 on z
+
                     ok, rvec, tvec = cv2.solvePnP(
                         OBJ_PTS,
-                        # corners[0][0],
                         corner,
                         self.camera_matrix,
                         self.distortion_coeffs,
                         flags=cv2.SOLVEPNP_IPPE_SQUARE,
                     )
-                    # self.get_logger().info(f'rvec: {rvec}\ntvec: {tvec}')
-    
-                    # if PnP can be sovled for tag 
-                    if ok:
-    
-                        # converts rotation vector into 3x3 rot matrix
-                        R_marker_to_cam, _ = cv2.Rodrigues(rvec)
-                        # Image X is robot -Y, Image Y is robot -Z, Image Z is robot X
-                        R_image_to_robot_axes = np.array(
-                            [
-                                [0, 0, 1],
-                                [-1, 0, 0],
-                                [0, -1, 0],
-                            ]
-                        )
 
-                        R_cam_to_robot = R_image_to_robot_axes
-    
-    
-                        R_marker_to_robot = R_cam_to_robot @ R_marker_to_cam
-                        R_marker_to_robot = R_marker_to_robot
-    
-                        T_cam_to_robot = np.array(
-                            [[-0.1], [0], [0]]
-                        )  # camera is 10cm in front of the robot axis
-                        # self.get_logger().info(f'tvec: {tvec}')
-    
-                        T_marker_in_cam = tvec.reshape(3, 1)
-                        T_marker_to_robot = (
-                            R_cam_to_robot @ T_marker_in_cam + T_cam_to_robot
-                        )
-
-                        self.get_logger().info(f'T_marker_to_robot: {T_marker_to_robot}')
-                        dist_to_block = np.hypot(T_marker_to_robot[0].item(), T_marker_to_robot[1].item())
-                        self.get_logger().info(f'distance to block: {dist_to_block}')
-                        if dist_to_block > self.max_block_dist:
-                            continue
-    
+                    if not ok:  
                         self.logger.debug(
-                            f"Tag Detected: Marker center is {T_marker_to_robot[0]} m away,  {T_marker_to_robot[1]} m to the left, and {T_marker_to_robot[2]} m down)",
+                            "Could not solve PnP for detected tag.",
                             throttle_duration_sec=1.0,
                         )
-                        
-                        candidate_pose_stamped = PoseStamped()
-                        # candidate_pose_stamped.header.frame_id = f'{self.get_namespace()}/aruco_31'[1:]
-                        candidate_pose_stamped.header.frame_id = 'aruco_31'
-                        # candidate_pose_stamped.header.frame_id = 'sierra/base_link'
-                        candidate_pose_stamped.header.stamp = msg.header.stamp
+                        continue
 
-                        candidate_pose_stamped.pose.position.x = float(T_marker_to_robot[0])
-                        candidate_pose_stamped.pose.position.y = float(T_marker_to_robot[1])
-                        candidate_pose_stamped.pose.position.z = float(T_marker_to_robot[2])
-                        
-                        x, y, z, w = Rotation.from_matrix(R_marker_to_robot).as_quat()
-                        candidate_pose_stamped.pose.orientation.x = x
-                        candidate_pose_stamped.pose.orientation.y = y
-                        candidate_pose_stamped.pose.orientation.z = z
-                        candidate_pose_stamped.pose.orientation.w = w
-    
-                        self.get_logger().info(f'Pose in frame_id baselink: \
-                            x: {candidate_pose_stamped.pose.position.x}, \
-                            y: {candidate_pose_stamped.pose.position.y}, \
-                            z: {candidate_pose_stamped.pose.position.z}')
-    
+                    T_marker_to_robot, R_marker_to_robot = self.camera2robot_tfs(rvec, tvec)  
 
-                        # replace the tf_buffer.transform() call with this
-                        self.detection_queue.append({
-                            'stamp': msg.header.stamp,
-                            'pose': candidate_pose_stamped,
-                            'block_id': candidate_block_id,
-                        })
+                    dist_to_block = np.hypot(T_marker_to_robot[0].item(), T_marker_to_robot[1].item())
+                    self.get_logger().info(f'distance to block: {dist_to_block}')
+                    if dist_to_block > self.max_block_dist:
+                        continue
 
-                        continue  # skip the rest, let the timer handle it d
-                        
-
-                else:
                     self.logger.debug(
-                        "Could not solve PnP for detected tag.",
+                        f"Tag Detected: Marker center is {T_marker_to_robot[0]} m away, "
+                        f"{T_marker_to_robot[1]} m to the left, and {T_marker_to_robot[2]} m down)",
                         throttle_duration_sec=1.0,
                     )
+
+                    candidate_pose_stamped = self.create_pose(msg, T_marker_to_robot, R_marker_to_robot)
+
+                    self.detection_queue.append({
+                        'stamp': msg.header.stamp,
+                        'pose': candidate_pose_stamped,
+                        'block_id': candidate_block_id,
+                    })
 
             else:
                 self.logger.debug(
                     "No tags detected in the image.", throttle_duration_sec=1.0
                 )
-                
-            # publish markes of blocks for rviz
-            self.publish_markers()
 
+            self.publish_markers()
 
         except Exception as e:
             self.logger.error(f"Error converting image: {e}")
-
 
     def process_detection_queue(self):
         still_pending = deque()
@@ -265,49 +226,106 @@ class DetectBlock(Node):
             stamp = detection['stamp']
             pose = detection['pose']
             block_id = detection['block_id']
-    
-            # if self.tf_buffer.can_transform('world', 'sierra/base_link', stamp):
-            if self.tf_buffer.can_transform('world', 'aruco_31', stamp):
 
+            if self.tf_buffer.can_transform('world', 'aruco_31', stamp):
                 try:
                     transformed_pose = self.tf_buffer.transform(pose, 'world')
-    
-                    candidate_block = Block()
-                    candidate_block.type = Block.TYPE_B
-                    candidate_block.pose = transformed_pose
-    
-                    duplicate = False
-                    for found_block, found_id in self.found_blocks:
-                        if found_id == block_id:
-                            found_block.pose = transformed_pose
-                            duplicate = True
-    
-                    if not duplicate:
-                        self.found_blocks.append((candidate_block, block_id))
-                        self.vis_pub.publish(candidate_block)
-                        self.publish_markers()
-    
+
+                    found_block = None
+                    for block in self.found_blocks:
+                        if block.block_id == block_id:
+                            found_block = block
+                            break
+
+                    if found_block is None:
+                        found_block = TrackedBlock(block_id)
+                        self.found_blocks.append(found_block)
+                    
+                    found_block.update(transformed_pose) # alias holds
+
                 except Exception as e:
                     self.get_logger().warn(f'Transform failed even after can_transform: {e}')
             else:
-                still_pending.append(detection)  # TF not here yet, try again next timer tick
-    
+                still_pending.append(detection)
+
         self.detection_queue = still_pending
 
+    def publish_blocks(self, out_of_view_blocks):
+        for pub_block_id in out_of_view_blocks:
+            
+            if pub_block_id in self.published_blocks:
+                continue
+
+            matched_block = None
+            for found_block in self.found_blocks:
+                if found_block.block_id == pub_block_id:
+                    matched_block = found_block
+                    break
+
+            if matched_block is None:
+                self.get_logger().info(f'block_id: {pub_block_id} became out-of-sight before transform and saving to found_block list took place')
+                continue
+    
+            pub_block = Block()
+            pub_block.type = Block.TYPE_B # TODO need to properly map
+            pub_block.pose = matched_block.get_averaged_pose(self.get_clock().now().to_msg())
+            self.vis_pub.publish(pub_block)
+
+            self.published_blocks.append(pub_block_id)
+
+    def create_pose(self, msg, T_marker_to_robot, R_marker_to_robot):
+        candidate_pose_stamped = PoseStamped()
+        candidate_pose_stamped.header.frame_id = 'aruco_31'
+        candidate_pose_stamped.header.stamp = msg.header.stamp
+
+        candidate_pose_stamped.pose.position.x = float(T_marker_to_robot[0])
+        candidate_pose_stamped.pose.position.y = float(T_marker_to_robot[1])
+        candidate_pose_stamped.pose.position.z = float(T_marker_to_robot[2])
+
+        x, y, z, w = Rotation.from_matrix(R_marker_to_robot).as_quat()
+        candidate_pose_stamped.pose.orientation.x = x
+        candidate_pose_stamped.pose.orientation.y = y
+        candidate_pose_stamped.pose.orientation.z = z
+        candidate_pose_stamped.pose.orientation.w = w
+
+        self.get_logger().info(
+            f'Pose in frame_id aruco_31: '
+            f'x: {candidate_pose_stamped.pose.position.x:.3f}, '
+            f'y: {candidate_pose_stamped.pose.position.y:.3f}, '
+            f'z: {candidate_pose_stamped.pose.position.z:.3f}'
+        )
+
+        return candidate_pose_stamped
+
+    def camera2robot_tfs(self, rvec, tvec):
+        R_marker_to_cam, _ = cv2.Rodrigues(rvec)
+
+        R_image_to_robot_axes = np.array([
+            [0, 0, 1],
+            [-1, 0, 0],
+            [0, -1, 0],
+        ])
+
+        R_cam_to_robot = R_image_to_robot_axes
+        R_marker_to_robot = R_cam_to_robot @ R_marker_to_cam
+
+        T_cam_to_robot = np.array([[-0.1], [0], [0]])
+        T_marker_in_cam = tvec.reshape(3, 1)
+        T_marker_to_robot = R_cam_to_robot @ T_marker_in_cam + T_cam_to_robot
+
+        return T_marker_to_robot, R_marker_to_robot
 
     def publish_markers(self):
         marker_array = MarkerArray()
-        for block, block_id in self.found_blocks:
+        for block in self.found_blocks:
             marker = Marker()
             marker.header.frame_id = 'world'
             marker.header.stamp = self.get_clock().now().to_msg()
             marker.ns = 'found_blocks'
-            marker.id = block_id
+            marker.id = block.block_id
             marker.type = Marker.CUBE
-            # this is how we remove old markers
-            marker.action = Marker.ADD 
-            marker.pose = block.pose.pose
-    
+            marker.action = Marker.ADD
+            marker.pose = block.get_averaged_pose(self.get_clock().now().to_msg()).pose
             marker.scale.x = 0.1
             marker.scale.y = 0.2
             marker.scale.z = 0.1
