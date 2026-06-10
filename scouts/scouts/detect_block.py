@@ -219,6 +219,7 @@ class DetectBlock(Node):
                     "No tags detected in the image.", throttle_duration_sec=1.0
                 )
 
+            self.get_logger().info(f'out_of_view_blocks: {out_of_view_blocks}')
             if out_of_view_blocks:
                 self.publish_blocks(out_of_view_blocks)
 
