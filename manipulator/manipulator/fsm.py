@@ -271,7 +271,10 @@ class RobotFSM(Node):
         goal.header.stamp = self.get_clock().now().to_msg()
         goal.pose.position.x = cx
         goal.pose.position.y = cy
-        goal.pose.orientation.w = 1.0  # yaw 0 -> facing world +x, toward stockpile
+        goal.pose.orientation.x = 0.0
+        goal.pose.orientation.y = 0.0
+        goal.pose.orientation.z = 0.8939967
+        goal.pose.orientation.w = -0.4480736   # yaw 0 -> facing world +x, toward stockpile
 
         pickup_pose = goal
         dropoff_pose = goal_handle.request.block.pose
@@ -327,7 +330,7 @@ class RobotFSM(Node):
         # navigating to the block
 
         self.state = State.NAVIGATE_TO_PICKUP
-        pickup_offset = self.offset_pose(pickup_pose, self.x_offset, self.y_offset)
+        pickup_offset = self.offset_pose(pickup_pose, -self.x_offset, self.y_offset)
 
         success = await self.navigate_to_pose(pickup_offset)
         self.get_logger().info(f'Arrived at pickup location: {success}')

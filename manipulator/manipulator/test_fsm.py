@@ -24,13 +24,19 @@ class TestFSM(Node):
         self.pick.header.stamp = self.get_clock().now().to_msg()
         self.pick.pose.position.x = 1.0
         self.pick.pose.position.y = 1.0
-        self.pick.pose.orientation.w = 1.0  # Facing forward
+        self.pick.pose.orientation.x = 0.0
+        self.pick.pose.orientation.y = 0.0
+        self.pick.pose.orientation.z = 0.8939967
+        self.pick.pose.orientation.w = -0.4480736  # Facing forward
 
         self.place = PoseStamped()
         self.place.header.frame_id = 'world'
         self.place.header.stamp = self.get_clock().now().to_msg()
         self.place.pose.position.x = 2.5
         self.place.pose.position.y = 0.5
+        self.place.pose.orientation.x = 0.0
+        self.place.pose.orientation.y = 0.0
+        self.place.pose.orientation.z = 0.0
         self.place.pose.orientation.w = 1.0  # Facing forward
 
         # self.place = PoseStamped()

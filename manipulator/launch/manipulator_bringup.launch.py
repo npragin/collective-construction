@@ -45,7 +45,7 @@ def generate_launch_description():
                 "depth_topic": "/j100_0897/sensors/camera_0/depth/image",
                 "camera_info_topic": "/j100_0897/sensors/camera_0/color/camera_info",
                 "depth_camera_info_topic": "/j100_0897/sensors/camera_0/depth/camera_info",
-                "marker_size": 0.054,
+                "marker_size": 0.0385,
                 "aruco_dictionary": "25h9",
                 "target_id": -1,
                 "publish_tf": False,
