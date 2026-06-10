@@ -77,9 +77,21 @@ def generate_launch_description():
         ],
     )
 
+    blockscan = Node(
+        package='manipulator',
+        executable='blockscan',
+        name='blockscan',
+        output='screen',
+        parameters=[{
+            'namespace': namespace,
+            'use_sim_time': use_sim_time,
+        }],
+    )
+
     return LaunchDescription([
         namespace_arg,
         use_sim_time_arg,
         absolute_move,
-        aruco_detector
+        aruco_detector,
+        blockscan
     ])

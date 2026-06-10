@@ -24,6 +24,7 @@ from manipulator_interface.action import TransportBlock
 from manipulator_interface.action import AbsoluteMove
 from control_msgs.action import GripperCommand
 from manipulator_interface.srv import DetectMarkers
+from std_srvs.srv import Trigger
 from cc_interfaces.action import ManipulationTask
 
 
@@ -168,6 +169,10 @@ class RobotFSM(Node):
         while not self.block_detection.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
 
+        self.block_scan = self.create_client(Trigger, '/blockscan/scan')
+        while not self.block_scan.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('blockscan service not available, waiting again...')
+
         self.manipulator = Manipulator(self, namespace=self.manipulator_namespace)
         self.state = State.IDLE
 
@@ -191,8 +196,18 @@ class RobotFSM(Node):
         self.y_offset = 0.00 #meters
 
     async def detect_blocks(self):
-        attempts = 5   # initial try + 2 retries
+        attempts = 5   # initial try + 4 retries
         for attempt in range(attempts):
+            # Always scan first: drive the base so an orange block sits at the
+            # target image point (middle / lower third) before running marker
+            # detection, so the marker is framed for the detector each attempt.
+            self.get_logger().info(
+                f'Scanning for block before detection '
+                f'(attempt {attempt + 1}/{attempts})'
+            )
+            scan = await self.block_scan.call_async(Trigger.Request())
+            self.get_logger().info(f'blockscan result: {scan.message}')
+
             block_request = DetectMarkers.Request()
             block_request.target_id = -1
 
@@ -212,13 +227,6 @@ class RobotFSM(Node):
                 self.get_logger().warn('No blocks with a valid arm-frame pose detected')
             else:
                 self.get_logger().error(f'Block detection failed: {result.message}')
-
-            if attempt < attempts - 1:
-                self.get_logger().info(
-                    f'No block detected; retrying in 5 s '
-                    f'(attempt {attempt + 2}/{attempts})'
-                )
-                await self._sleep(5.0)
 
         self.get_logger().error(f'No block detected after {attempts} attempts')
         return None
@@ -485,7 +493,7 @@ class RobotFSM(Node):
         px = place_pose.pose.position.x
         py = place_pose.pose.position.y
         place_pose.pose.position.x = min(max(px, 0.35), 0.45)
-        place_pose.pose.position.y = min(max(py, -0.20), 0.20)
+        place_pose.pose.position.y = min(max(py, -0.10), 0.10)
         if (place_pose.pose.position.x, place_pose.pose.position.y) != (px, py):
             self.get_logger().warn(
                 f'Clipped place target ({px:.3f}, {py:.3f}) -> '
