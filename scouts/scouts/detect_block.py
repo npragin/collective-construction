@@ -31,7 +31,8 @@ from collections import deque
 This code was developed by Zane and Atharv and edited slightly by Liam
 """
 
-MARKER_SIZE = 0.043
+# MARKER_SIZE = 0.043
+MARKER_SIZE = 0.48
 # MARKER_SIZE = 0.055
 OBJ_PTS = np.array(
     [
