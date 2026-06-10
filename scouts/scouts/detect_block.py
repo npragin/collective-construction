@@ -361,7 +361,7 @@ class DetectBlock(Node):
             marker.action = Marker.ADD
             marker.pose = block.get_averaged_pose(self.get_clock().now().to_msg()).pose
             marker.scale.x = 0.1
-            marker.scale.y = 0.2
+            marker.scale.y = 0.4
             marker.scale.z = 0.1
             marker.color.r = 1.0
             marker.color.g = 0.4
