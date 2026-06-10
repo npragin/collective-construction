@@ -190,7 +190,7 @@ class DetectBlock(Node):
                         continue
 
                     # only add in the visible blocks below 2m away.
-                    curr_visible_block_ids.update(candidate_block_id)
+                    curr_visible_block_ids.add(candidate_block_id)
 
                     self.logger.debug(
                         f"Tag Detected: Marker center is {T_marker_to_robot[0]} m away, "
