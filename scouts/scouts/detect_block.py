@@ -158,7 +158,7 @@ class DetectBlock(Node):
             )
             out_of_view_blocks = set()
             curr_visible_block_ids = set()
-            
+
             if ids is not None:
                 self.logger.debug(f"Found {len(ids)} tags: {ids.flatten()}")
 
@@ -259,7 +259,7 @@ class DetectBlock(Node):
         self.detection_queue = still_pending
 
     def publish_blocks(self, out_of_view_blocks):
-        self.get_logger().info('in publish blocks)')
+        self.get_logger().info(f'pubbing: out_of_view_blocks: {out_of_view_blocks}')
         for pub_block_id in out_of_view_blocks:
             
             if pub_block_id in self.published_blocks:
