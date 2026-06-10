@@ -172,7 +172,7 @@ class DetectBlock(Node):
                 for i in range(len(ids)):
                     candidate_block_id = ids[i].item()
                     corner = corners[i][0]
-                    self.get_logger().info(f'id: {candidate_block_id}')
+                    # self.get_logger().info(f'id: {candidate_block_id}')
 
                     ok, rvec, tvec = cv2.solvePnP(
                         OBJ_PTS,
@@ -192,7 +192,7 @@ class DetectBlock(Node):
                     T_marker_to_robot, R_marker_to_robot = self.camera2robot_tfs(rvec, tvec)  
 
                     dist_to_block = np.hypot(T_marker_to_robot[0].item(), T_marker_to_robot[1].item())
-                    self.get_logger().info(f'distance to block: {dist_to_block}')
+                    # self.get_logger().info(f'distance to block: {dist_to_block}')
                     if dist_to_block > self.max_block_dist:
                         continue
 
@@ -266,9 +266,14 @@ class DetectBlock(Node):
                 self.get_logger().info(f'block_id: {pub_block_id} became out-of-sight before transform and saving to found_block list took place')
                 continue
     
+
             pub_block = Block()
             pub_block.type = Block.TYPE_B # TODO need to properly map
             pub_block.pose = matched_block.get_averaged_pose(self.get_clock().now().to_msg())
+
+            self.get_logger().info(f'Publishing block_id: {pub_block_id} at\
+                (x: {pub_block.pose.position.x} y: {pub_block.pose.position.y}) in world frame')
+
             self.vis_pub.publish(pub_block)
 
             self.published_blocks.append(pub_block_id)
