@@ -1,0 +1,2 @@
+# Running the logger
+ros2 run manipulator picked_tag_logger
