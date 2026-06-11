@@ -373,6 +373,9 @@ class CcLocalizationNode(Node):
             return
         ids_flat = ids.flatten()
 
+        if sum(1 for tid in OUTER_TAG_IDS if tid in ids_flat) < 3:
+            return
+
         outer_ok, rvec_w, tvec_w = self.solve_frame(self.outer_corners, ids_flat, corners)
         inner_ok, rvec_i, tvec_i = self.solve_frame(self.inner_corners, ids_flat, corners)
 
