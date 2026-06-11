@@ -369,7 +369,7 @@ class RobotFSM(Node):
         success = await self.navigate_to_pose(pickup_offset)
         self.get_logger().info(f'Arrived at pickup location: {success}')
         if not success:
-            success = await self.navigate_to_pose(pickup_pose)
+            success = await self.navigate_to_pose(pickup_offset)
 
         # Nav2 stops within its (coarse) goal tolerance; fine-tune the heading
         # in place via cmd_vel so the base faces the pickup centroid.
@@ -402,7 +402,7 @@ class RobotFSM(Node):
         success = await self.navigate_to_pose(dropoff_offset)
 
         if not success:
-            success = await self.navigate_to_pose(dropoff_pose)
+            success = await self.navigate_to_pose(dropoff_offset)
         if not success:
             return False
 
@@ -569,6 +569,15 @@ class RobotFSM(Node):
 
         self.get_logger().info('Starting place sequence')
 
+        # Requested placement location in its original (world) frame, kept so we
+        # can report where the block actually ended up afterwards.
+        target_frame = place_pose.header.frame_id
+        target_x = place_pose.pose.position.x
+        target_y = place_pose.pose.position.y
+        self.get_logger().info(
+            f'Placing block #{self.blocks_placed + 1}: requested target '
+            f'(x={target_x:.3f}, y={target_y:.3f}) [{target_frame}]')
+
         # dropoff_pose arrives in the world frame; convert it to the arm base
         # frame before sending to the manipulator (which plans in arm_0_base_link).
         try:
@@ -598,6 +607,11 @@ class RobotFSM(Node):
                 f'({place_pose.pose.position.x:.3f}, '
                 f'{place_pose.pose.position.y:.3f})')
 
+        self.get_logger().info(
+            f'Commanded place pose (arm frame): '
+            f'(x={place_pose.pose.position.x:.3f}, '
+            f'y={place_pose.pose.position.y:.3f})')
+
         # Remap the orientation
         o = place_pose.pose.orientation
         o.x, o.y, o.z, o.w = o.w, o.z, -o.y, -o.x
@@ -625,7 +639,24 @@ class RobotFSM(Node):
 
         if not success:
             return False
-        
+
+        # Report where the block actually ended up, back in the target frame,
+        # and how far that is from the requested location.
+        try:
+            placed = copy.deepcopy(place_pose_drop)
+            placed.header.stamp.sec = 0
+            placed.header.stamp.nanosec = 0
+            placed = self.tf_buffer.transform(
+                placed, target_frame, timeout=Duration(seconds=1.0))
+            self.get_logger().info(
+                f'Block placed at (x={placed.pose.position.x:.3f}, '
+                f'y={placed.pose.position.y:.3f}) [{target_frame}]; '
+                f'offset from target (dx={placed.pose.position.x - target_x:+.3f}, '
+                f'dy={placed.pose.position.y - target_y:+.3f})')
+        except TransformException as exc:
+            self.get_logger().warn(
+                f'Could not report actual placement location: {exc}')
+
         place_pose_lift = copy.deepcopy(place_pose)
         place_pose_lift.pose.position.z = 0.0
         success = await self.manipulator.move_to_pose(place_pose_lift)
