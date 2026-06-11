@@ -422,9 +422,6 @@ class RobotFSM(Node):
 
         if not success:
             return False
-        
-        #log the picked AprilTagID
-        await self.log_picked_tag(self.last_picked_aruco_id, dropoff_pose)
 
         # navigate to drop off
 
@@ -446,6 +443,9 @@ class RobotFSM(Node):
 
         if not success:
             return False
+
+        # log the picked AprilTag ID now that the block has been placed
+        await self.log_picked_tag(self.last_picked_aruco_id, dropoff_pose)
 
         self.state = State.COMPLETE
         self.get_logger().info('Mission completed successfully')
