@@ -27,7 +27,6 @@ from control_msgs.action import GripperCommand
 from manipulator_interface.srv import DetectMarkers
 from std_srvs.srv import Trigger
 from cc_interfaces.action import ManipulationTask
-from cc_interfaces.srv import LogPickedTag
 
 
 class State(Enum):
@@ -65,7 +64,7 @@ class Manipulator:
 
         self.pick_pose = [0.46217,-0.030112,-0.1223,-0.055763,0.9973,0.0073431,0.04721]
         self.place_pose = [0.46217,-0.030112, -0.1200,-0.055763,0.9973,0.0073431,0.04721]
-        
+
 
         self.stow_pose = [0.21218,-0.075709,0.41342,0.72917,0.016382,0.68135,-0.061708]
 
@@ -170,9 +169,6 @@ class RobotFSM(Node):
         self.block_detection = self.create_client(DetectMarkers, '/aruco/detect_markers')
         while not self.block_detection.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
-        self.picked_tag_logger = self.create_client(LogPickedTag, '/log_picked_tag')
-        while not self.picked_tag_logger.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Waiting for /log_picked_tag service...')
 
         self.block_scan = self.create_client(Trigger, '/blockscan/scan')
         while not self.block_scan.wait_for_service(timeout_sec=1.0):
@@ -180,7 +176,6 @@ class RobotFSM(Node):
 
         self.manipulator = Manipulator(self, namespace=self.manipulator_namespace)
         self.state = State.IDLE
-        self.last_picked_aruco_id = None
 
         # TF, used to convert dropoff poses from the world frame into the arm base frame.
         self.tf_buffer = Buffer()
@@ -240,31 +235,11 @@ class RobotFSM(Node):
             if result.success:
                 # Keep only markers that resolved to a valid arm-frame pose
                 # (empty frame_id means the TF lookup failed for that marker).
-                #the new code reutrns the bloc ID to the checker
-                """arm_poses = [p for p in result.poses_arm if p.header.frame_id]
-                            if arm_poses:
-                                self.get_logger().info(
-                                    f'Detected {len(arm_poses)} block(s); ids={list(result.ids)}'
-                                )
-                                return arm_poses
-                """
-                valid_blocks = [
-                    (marker_id, pose_arm)
-                    for marker_id, pose_arm in zip(result.ids, result.poses_arm)
-                    if pose_arm.header.frame_id
-                ]
-
-                if valid_blocks:
-                    self.last_picked_aruco_id = valid_blocks[0][0]
-                    arm_poses = [pose_arm for _, pose_arm in valid_blocks]
-
+                arm_poses = [p for p in result.poses_arm if p.header.frame_id]
+                if arm_poses:
                     self.get_logger().info(
-                        f'Detected {len(arm_poses)} block(s); ids={[marker_id for marker_id, _ in valid_blocks]}'
+                        f'Detected {len(arm_poses)} block(s); ids={list(result.ids)}'
                     )
-                    self.get_logger().info(
-                        f'Selected AprilTag ID {self.last_picked_aruco_id} for pickup'
-                    )
-
                     return arm_poses
                 self.get_logger().warn('No blocks with a valid arm-frame pose detected')
             else:
@@ -291,23 +266,6 @@ class RobotFSM(Node):
         new_pose.pose.position.y += dy
 
         return new_pose
-    async def log_picked_tag(self, aruco_id, dropoff_pose):
-        if aruco_id is None:
-            self.get_logger().warn('No AprilTag ID stored; skipping picked tag log.')
-            return False
-
-        request = LogPickedTag.Request()
-        request.aruco_id = int(aruco_id)
-        request.dropoff_pose = dropoff_pose
-
-        result = await self.picked_tag_logger.call_async(request)
-
-        if result.success:
-            self.get_logger().info(result.message)
-            return True
-
-        self.get_logger().warn(f'Failed to log picked tag: {result.message}')
-        return False
 
     async def execute_callback_2(self, goal_handle):
         """Navigate to the stockpile centroid and report success."""

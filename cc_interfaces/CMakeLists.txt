@@ -19,7 +19,6 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/RetrievalTask.action"
   "action/ManipulationTask.action"
   "srv/CheckPlacement.srv"
-  "srv/LogPickedTag.srv"
   "action/CorrectionTask.action"
   DEPENDENCIES geometry_msgs std_msgs action_msgs
 )
