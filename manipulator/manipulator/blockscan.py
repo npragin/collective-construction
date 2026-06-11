@@ -30,7 +30,7 @@ class BlockScan(Node):
     # Target image point for the orange centroid: horizontal middle, vertical
     # lower third (y grows downward, so 2/3 of the height is the lower third).
     TARGET_X_FRAC = 0.5
-    TARGET_Y_FRAC = 2.0 / 3.0
+    TARGET_Y_FRAC = 0.55    # slightly higher than the lower third (y grows downward)
 
     # Horizontal centring via rotation. Proportional on pixel error so the turn
     # eases off near target instead of overshooting.

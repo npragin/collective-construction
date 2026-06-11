@@ -1,4 +1,5 @@
 import time
+import math
 
 import numpy
 from enum import Enum, auto
@@ -10,7 +11,7 @@ from rclpy.node import Node
 from rclpy.action import ActionServer, ActionClient
 from rclpy.task import Future
 
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, TwistStamped
 from std_msgs.msg import Bool, Int32
 
 from rclpy.duration import Duration
@@ -194,11 +195,16 @@ class RobotFSM(Node):
         self.idle_pub = self.create_publisher(Bool, 'manipulator_idle_time', 10)
         self.placed_blocks_pub = self.create_publisher(Int32, 'manipulator_blocks_placed', 10)
 
+        # Direct base velocity command, used to fine-tune heading after Nav2 stops.
+        # nav2.yaml has enable_stamped_cmd_vel: true, so the base expects TwistStamped.
+        self.cmd_vel_pub = self.create_publisher(
+            TwistStamped, f'/{self.namespace}/cmd_vel', 10)
+
         self.timer = self.create_timer(1.0, self.timer_callback)
 
 
         self.x_offset = -0.45 #meters
-        self.y_offset = 0.10 #meters
+        self.y_offset = 0.01 
         self.blocks_placed = 0
 
 
@@ -364,7 +370,11 @@ class RobotFSM(Node):
         self.get_logger().info(f'Arrived at pickup location: {success}')
         # if not success:
         #     return False
-        
+
+        # Nav2 stops within its (coarse) goal tolerance; fine-tune the heading
+        # in place via cmd_vel so the base faces the pickup centroid.
+        await self.orient_to(pickup_pose)
+
         time.sleep(2)
         
         # Detect block
@@ -394,6 +404,10 @@ class RobotFSM(Node):
         if not success:
             return False
 
+        # Nav2 stops within its (coarse) goal tolerance; fine-tune the heading
+        # in place via cmd_vel so the base faces the block before placing.
+        await self.orient_to(dropoff_pose)
+
         # place block
 
         self.state = State.PLACE_BLOCK
@@ -402,12 +416,73 @@ class RobotFSM(Node):
         if not success:
             return False
 
-        # log the picked AprilTag ID now that the block has been placed
-        await self.log_picked_tag(self.last_picked_aruco_id, dropoff_pose)
-
         self.state = State.COMPLETE
         self.get_logger().info('Mission completed successfully')
 
+        return True
+
+    def _publish_cmd_vel(self, wz):
+        """Publish an in-place rotation command on /<ns>/cmd_vel."""
+        msg = TwistStamped()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = 'base_link'
+        msg.twist.angular.z = wz
+        self.cmd_vel_pub.publish(msg)
+
+    async def orient_to(self, target_pose, tol=0.03, kp=0.5,
+                        max_wz=0.25, min_wz=0.05, max_dwz=0.04, timeout=20.0):
+        """Rotate the base in place (via cmd_vel) to face target_pose.
+
+        Closed loop on the world->base_link TF: turns until the base x-axis
+        points at the target. Runs after Nav2 has stopped, so it owns the base.
+        """
+        # Resolve the target into the world frame.
+        tgt = copy.deepcopy(target_pose)
+        tgt.header.stamp.sec = 0
+        tgt.header.stamp.nanosec = 0
+        try:
+            tgt = self.tf_buffer.transform(
+                tgt, 'world', timeout=Duration(seconds=1.0))
+        except TransformException as exc:
+            self.get_logger().warn(
+                f'orient_to: could not transform target to world: {exc}')
+            return False
+        tx, ty = tgt.pose.position.x, tgt.pose.position.y
+
+        elapsed, dt, wz_cmd = 0.0, 0.1, 0.0
+        while elapsed < timeout:
+            try:
+                tf = self.tf_buffer.lookup_transform(
+                    'world', 'base_link', rclpy.time.Time(),
+                    timeout=Duration(seconds=1.0))
+            except TransformException as exc:
+                self.get_logger().warn(f'orient_to: TF lookup failed: {exc}')
+                break
+
+            q = tf.transform.rotation
+            yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y),
+                             1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+            desired = math.atan2(ty - tf.transform.translation.y,
+                                 tx - tf.transform.translation.x)
+            err = math.atan2(math.sin(desired - yaw), math.cos(desired - yaw))
+
+            if abs(err) <= tol:
+                self.get_logger().info(
+                    f'orient_to: aligned (err {err:+.3f} rad)')
+                break
+
+            wz = max(-max_wz, min(max_wz, kp * err))
+            if abs(wz) < min_wz:          # overcome stiction on tiny errors
+                wz = math.copysign(min_wz, wz)
+            # Slew-rate limit so the turn ramps smoothly instead of snapping.
+            wz_cmd += max(-max_dwz, min(max_dwz, wz - wz_cmd))
+            self._publish_cmd_vel(wz_cmd)
+            await self._sleep(dt)
+            elapsed += dt
+        else:
+            self.get_logger().warn('orient_to: timed out before aligning')
+
+        self._publish_cmd_vel(0.0)        # always leave the base stopped
         return True
 
     async def navigate_to_pose(self, pose):
@@ -536,7 +611,7 @@ class RobotFSM(Node):
 
 
         place_pose_drop = copy.deepcopy(place_pose)
-        place_pose_drop.pose.position.z = -0.09
+        place_pose_drop.pose.position.z = -0.10
         success = await self.manipulator.move_to_pose(place_pose_drop)
 
         if not success:
