@@ -1,0 +1,5 @@
+int32 aruco_id
+geometry_msgs/PoseStamped dropoff_pose
+---
+bool success
+string message
