@@ -10,10 +10,9 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import rclpy
 from ament_index_python.packages import get_package_share_directory
 from cc_interfaces.msg import Stockpiles
-
-import rclpy
 from geometry_msgs.msg import Point, Point32, Polygon, PolygonStamped, TransformStamped
 from nav_msgs.msg import OccupancyGrid
 from rclpy.node import Node
@@ -29,7 +28,9 @@ STOCKPILE_TAG_IDS = (8, 9, 10)
 NON_ROBOT_TAG_IDS = set(OUTER_TAG_IDS) | set(INNER_TAG_IDS) | set(STOCKPILE_TAG_IDS)
 
 
-def corners_for(ids: tuple[int, int, int, int], length: float, width: float) -> dict[int, tuple[float, float]]:
+def corners_for(
+    ids: tuple[int, int, int, int], length: float, width: float
+) -> dict[int, tuple[float, float]]:
     """Map the four corner tag ids to their (x, y) positions in their own frame."""
     origin, plus_x, plus_xy, plus_y = ids
     return {
@@ -44,7 +45,12 @@ def tag_local(marker_size: float) -> np.ndarray:
     """Return the four marker corners in the marker's local frame (z=0)."""
     half = marker_size / 2.0
     return np.array(
-        [[-half, half, 0.0], [half, half, 0.0], [half, -half, 0.0], [-half, -half, 0.0]],
+        [
+            [-half, half, 0.0],
+            [half, half, 0.0],
+            [half, -half, 0.0],
+            [-half, -half, 0.0],
+        ],
         dtype=np.float32,
     )
 
@@ -73,7 +79,9 @@ def ema_step(
     return smoothed_pos, smoothed_yaw
 
 
-def rect_in_world(R2: np.ndarray, t2: np.ndarray, length: float, width: float) -> np.ndarray:
+def rect_in_world(
+    R2: np.ndarray, t2: np.ndarray, length: float, width: float
+) -> np.ndarray:
     """Transform a (0,0)->(L,W) rectangle by a 2x2 rotation and 2D translation."""
     local = np.array([[0.0, 0.0], [length, 0.0], [length, width], [0.0, width]])
     return (R2 @ local.T).T + t2
@@ -157,33 +165,59 @@ class CcLocalizationNode(Node):
         self.declare_parameter("orange_morph_kernel", 3)
 
         device_id = self.get_parameter("device_id").get_parameter_value().integer_value
-        self.marker_size = self.get_parameter("marker_size").get_parameter_value().double_value
-        world_length = self.get_parameter("world_length").get_parameter_value().double_value
-        world_width = self.get_parameter("world_width").get_parameter_value().double_value
-        inner_length = self.get_parameter("inner_length").get_parameter_value().double_value
-        inner_width = self.get_parameter("inner_width").get_parameter_value().double_value
+        self.marker_size = (
+            self.get_parameter("marker_size").get_parameter_value().double_value
+        )
+        world_length = (
+            self.get_parameter("world_length").get_parameter_value().double_value
+        )
+        world_width = (
+            self.get_parameter("world_width").get_parameter_value().double_value
+        )
+        inner_length = (
+            self.get_parameter("inner_length").get_parameter_value().double_value
+        )
+        inner_width = (
+            self.get_parameter("inner_width").get_parameter_value().double_value
+        )
         self.stockpile_dims = (
             self.get_parameter("stockpile_length").get_parameter_value().double_value,
             self.get_parameter("stockpile_width").get_parameter_value().double_value,
         )
-        self.koz_resolution = self.get_parameter("koz_mask_resolution").get_parameter_value().double_value
-        self.world_frame = self.get_parameter("world_frame").get_parameter_value().string_value
-        self.inner_frame = self.get_parameter("inner_frame").get_parameter_value().string_value
-        self.camera_frame = self.get_parameter("camera_frame").get_parameter_value().string_value
-        tick_rate_hz = self.get_parameter("tick_rate_hz").get_parameter_value().double_value
+        self.koz_resolution = (
+            self.get_parameter("koz_mask_resolution").get_parameter_value().double_value
+        )
+        self.world_frame = (
+            self.get_parameter("world_frame").get_parameter_value().string_value
+        )
+        self.inner_frame = (
+            self.get_parameter("inner_frame").get_parameter_value().string_value
+        )
+        self.camera_frame = (
+            self.get_parameter("camera_frame").get_parameter_value().string_value
+        )
+        tick_rate_hz = (
+            self.get_parameter("tick_rate_hz").get_parameter_value().double_value
+        )
         self.stockpile_ema_alpha = (
             self.get_parameter("stockpile_ema_alpha").get_parameter_value().double_value
         )
         self.orange_hsv_low = np.array(
-            self.get_parameter("orange_hsv_low").get_parameter_value().double_array_value,
+            self.get_parameter("orange_hsv_low")
+            .get_parameter_value()
+            .double_array_value,
             dtype=np.uint8,
         )
         self.orange_hsv_high = np.array(
-            self.get_parameter("orange_hsv_high").get_parameter_value().double_array_value,
+            self.get_parameter("orange_hsv_high")
+            .get_parameter_value()
+            .double_array_value,
             dtype=np.uint8,
         )
         self.orange_morph_kernel = (
-            self.get_parameter("orange_morph_kernel").get_parameter_value().integer_value
+            self.get_parameter("orange_morph_kernel")
+            .get_parameter_value()
+            .integer_value
         )
 
         self.outer_corners = corners_for(OUTER_TAG_IDS, world_length, world_width)
@@ -192,7 +226,11 @@ class CcLocalizationNode(Node):
         self.inner_dims = (inner_length, inner_width)
         self.tag_local = tag_local(self.marker_size)
 
-        calib_path = Path(get_package_share_directory("cc_localization")) / "config" / "gopro_calib.npz"
+        calib_path = (
+            Path(get_package_share_directory("cc_localization"))
+            / "config"
+            / "gopro_calib.npz"
+        )
         calib = np.load(calib_path)
         self.mtx = calib["camera_matrix"]
         self.dist = calib["dist_coeffs"]
@@ -212,11 +250,14 @@ class CcLocalizationNode(Node):
         self.block_pub = self.create_publisher(OccupancyGrid, "block_mask", 1)
         self.free_map_pub = self.create_publisher(OccupancyGrid, "free_map", 1)
         self.stockpile_pub = self.create_publisher(Stockpiles, "stockpile_polygons", 1)
-        self.build_site_pub = self.create_publisher(PolygonStamped, "build_site_polygon", 1)
+        self.build_site_pub = self.create_publisher(
+            PolygonStamped, "build_site_polygon", 1
+        )
         self.timer = self.create_timer(1.0 / tick_rate_hz, self.tick)
 
         self.last_R_cw: np.ndarray | None = None
         self.last_t_w: np.ndarray | None = None
+        self.last_inner_rect: np.ndarray | None = None
         self.stockpile_ema: dict[int, tuple[np.ndarray, float]] = {}
 
     def destroy_node(self) -> None:
@@ -245,7 +286,9 @@ class CcLocalizationNode(Node):
         ok, rvec, tvec = cv2.solvePnP(obj_pts, img_pts, self.mtx, self.dist)
         return ok, rvec, tvec
 
-    def make_transform(self, parent: str, child: str, R: np.ndarray, t: np.ndarray) -> TransformStamped:
+    def make_transform(
+        self, parent: str, child: str, R: np.ndarray, t: np.ndarray
+    ) -> TransformStamped:
         """Build a stamped transform message from a rotation matrix and translation vector."""
         msg = TransformStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
@@ -313,7 +356,9 @@ class CcLocalizationNode(Node):
             mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
         return mask
 
-    def build_koz_grid(self, rects_world: list[np.ndarray], extra_mask: np.ndarray | None = None) -> OccupancyGrid:
+    def build_koz_grid(
+        self, rects_world: list[np.ndarray], extra_mask: np.ndarray | None = None
+    ) -> OccupancyGrid:
         """Rasterize rotated rectangles (each Nx2 in world coords) and OR an optional
         grid-resolution mask into an OccupancyGrid."""
         grid, width, height = self._new_grid_skeleton()
@@ -376,8 +421,12 @@ class CcLocalizationNode(Node):
         if sum(1 for tid in OUTER_TAG_IDS if tid in ids_flat) < 3:
             return
 
-        outer_ok, rvec_w, tvec_w = self.solve_frame(self.outer_corners, ids_flat, corners)
-        inner_ok, rvec_i, tvec_i = self.solve_frame(self.inner_corners, ids_flat, corners)
+        outer_ok, rvec_w, tvec_w = self.solve_frame(
+            self.outer_corners, ids_flat, corners
+        )
+        inner_ok, rvec_i, tvec_i = self.solve_frame(
+            self.inner_corners, ids_flat, corners
+        )
 
         transforms = []
         rects: list[np.ndarray] = []
@@ -404,21 +453,30 @@ class CcLocalizationNode(Node):
         orange_grid_mask = cv2.warpPerspective(orange_mask, H, (grid_w, grid_h))
 
         # world -> camera: invert the outer PnP.
-        transforms.append(self.make_transform(self.world_frame, self.camera_frame, R_cw, -R_cw @ t_w))
+        transforms.append(
+            self.make_transform(self.world_frame, self.camera_frame, R_cw, -R_cw @ t_w)
+        )
 
         # world -> inner: compose outer^-1 with inner, then flatten to (x, y, yaw).
         if inner_ok:
             R_wi = yaw_only(R_cw @ cv2.Rodrigues(rvec_i)[0])
             t_wi = R_cw @ (tvec_i.flatten() - t_w)
             t_wi[2] = 0.0
-            transforms.append(self.make_transform(self.world_frame, self.inner_frame, R_wi, t_wi))
-            inner_rect = rect_in_world(R_wi[:2, :2], t_wi[:2], *self.inner_dims)
-            rects.append(inner_rect)
+            transforms.append(
+                self.make_transform(self.world_frame, self.inner_frame, R_wi, t_wi)
+            )
+            self.last_inner_rect = rect_in_world(
+                R_wi[:2, :2], t_wi[:2], *self.inner_dims
+            )
+            rects.append(self.last_inner_rect)
 
+        if self.last_inner_rect is not None:
             poly_msg = PolygonStamped()
             poly_msg.header.stamp = self.get_clock().now().to_msg()
             poly_msg.header.frame_id = self.world_frame
-            poly_msg.polygon.points = [Point32(x=float(x), y=float(y), z=0.0) for x, y in inner_rect]
+            poly_msg.polygon.points = [
+                Point32(x=float(x), y=float(y), z=0.0) for x, y in self.last_inner_rect
+            ]
             self.build_site_pub.publish(poly_msg)
 
         # Per-tag PnP for everything that isn't a frame-defining outer/inner corner.
@@ -456,13 +514,19 @@ class CcLocalizationNode(Node):
                 R_wt = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
                 t_wt = np.array([smoothed_pos[0], smoothed_pos[1], 0.0])
 
-                transforms.append(self.make_transform(self.world_frame, f"stockpile_{tid}", R_wt, t_wt))
+                transforms.append(
+                    self.make_transform(
+                        self.world_frame, f"stockpile_{tid}", R_wt, t_wt
+                    )
+                )
                 stockpile_rect = rect_in_world(R_wt[:2, :2], t_wt[:2], sl, sw)
                 rects.append(stockpile_rect)
                 stockpile_ids.append(tid)
                 stockpile_rects[tid] = stockpile_rect
             else:
-                transforms.append(self.make_transform(self.world_frame, f"aruco_{tid}", R_wt, t_wt))
+                transforms.append(
+                    self.make_transform(self.world_frame, f"aruco_{tid}", R_wt, t_wt)
+                )
 
         self.broadcaster.sendTransform(transforms)
         self.koz_pub.publish(self.build_koz_grid(rects, extra_mask=orange_grid_mask))
@@ -471,11 +535,23 @@ class CcLocalizationNode(Node):
         self.publish_stockpiles(stockpile_rects)
 
         markers = MarkerArray()
-        markers.markers.append(self.make_rect_marker(self.world_frame, 0, *self.outer_dims, (0.1, 0.9, 0.1)))
+        markers.markers.append(
+            self.make_rect_marker(
+                self.world_frame, 0, *self.outer_dims, (0.1, 0.9, 0.1)
+            )
+        )
         if inner_ok:
-            markers.markers.append(self.make_rect_marker(self.inner_frame, 1, *self.inner_dims, (0.1, 0.5, 1.0)))
+            markers.markers.append(
+                self.make_rect_marker(
+                    self.inner_frame, 1, *self.inner_dims, (0.1, 0.5, 1.0)
+                )
+            )
         for idx, tid in enumerate(stockpile_ids):
-            markers.markers.append(self.make_rect_marker(f"stockpile_{tid}", 100 + idx, sl, sw, (1.0, 0.3, 0.1)))
+            markers.markers.append(
+                self.make_rect_marker(
+                    f"stockpile_{tid}", 100 + idx, sl, sw, (1.0, 0.3, 0.1)
+                )
+            )
         self.marker_pub.publish(markers)
 
 
