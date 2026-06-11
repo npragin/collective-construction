@@ -36,7 +36,7 @@ controller_server:
     general_goal_checker:
       stateful: true
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.15
+      xy_goal_tolerance: 0.20
       yaw_goal_tolerance: 0.15
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"
@@ -137,7 +137,15 @@ local_costmap:
       resolution: 0.06
       footprint: "[ [0.254, 0.2159], [0.254, -0.2159], [-0.254, -0.2159], [-0.254, 0.2159] ]"
       always_send_full_costmap: true
-      plugins: ["voxel_layer", "inflation_layer"]
+      plugins: ["voxel_layer", "robots_layer", "inflation_layer"]
+      robots_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_topic: /robot_mask
+        map_subscribe_transient_local: false
+        subscribe_to_updates: false
+        combination_method: 2
+        transform_tolerance: 0.5
+        enabled: true
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 4.0
@@ -162,9 +170,6 @@ local_costmap:
           raytrace_min_range: 0.0
           obstacle_max_range: 2.5
           obstacle_min_range: 0.0
-      static_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: true
 
 global_costmap:
   global_costmap:
@@ -291,7 +296,7 @@ collision_monitor:
     cmd_vel_out_topic: "cmd_vel"
     state_topic: "collision_monitor_state"
     transform_tolerance: 0.5
-    source_timeout: 1.0
+    source_timeout: 5.0
     base_shift_correction: True
     stop_pub_timeout: 2.0
     # Polygons represent zone around the robot for "stop", "slowdown" and "limit" action types,

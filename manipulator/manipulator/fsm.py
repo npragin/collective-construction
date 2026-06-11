@@ -199,11 +199,11 @@ class RobotFSM(Node):
         self.idle_pub = self.create_publisher(Bool, 'manipulator_idle_time', 10)
         self.placed_blocks_pub = self.create_publisher(Int32, 'manipulator_blocks_placed', 10)
 
-        self.timer = self.create_timer(0.1, self.timer_callback)
+        self.timer = self.create_timer(1.0, self.timer_callback)
 
 
         self.x_offset = -0.45 #meters
-        self.y_offset = 0.00 #meters
+        self.y_offset = 0.10 #meters
         self.blocks_placed = 0
 
 
@@ -354,7 +354,7 @@ class RobotFSM(Node):
 
         if success:
             self.state = State.IDLE
-            Self.blocks_placed += 1
+            self.blocks_placed += 1
             goal_handle.succeed()
         else:
             self.state = State.IDLE
@@ -404,8 +404,8 @@ class RobotFSM(Node):
 
         success = await self.navigate_to_pose(pickup_offset)
         self.get_logger().info(f'Arrived at pickup location: {success}')
-        if not success:
-            return False
+        # if not success:
+        #     return False
         
         time.sleep(2)
         
