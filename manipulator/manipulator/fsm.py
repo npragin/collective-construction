@@ -11,6 +11,7 @@ from rclpy.action import ActionServer, ActionClient
 from rclpy.task import Future
 
 from geometry_msgs.msg import PoseStamped
+from std_msgs.msg import Bool, Int32
 
 from rclpy.duration import Duration
 from tf2_ros import Buffer, TransformListener, TransformException
@@ -190,10 +191,26 @@ class RobotFSM(Node):
 
         self.get_logger().info('Robot FSM Ready')
 
+        self.idle_pub = self.create_publisher(Bool, 'manipulator_idle_time', 10)
+        self.placed_blocks_pub = self.create_publisher(Int32, 'manipulator_blocks_placed', 10)
+
+        self.timer = self.create_timer(0.1, self.timer_callback)
 
 
         self.x_offset = -0.45 #meters
         self.y_offset = 0.00 #meters
+        self.blocks_placed = 0
+
+
+    def timer_callback(self):
+        #send status feed back
+        if self.state == State.IDLE:
+            self.idle_pub.publish(Bool(data=True))
+        else:
+            self.idle_pub.publish(Bool(data=False))
+        self.placed_blocks_pub.publish(Int32(data=self.blocks_placed))
+
+
 
     async def detect_blocks(self):
         attempts = 5   # initial try + 4 retries
@@ -295,6 +312,7 @@ class RobotFSM(Node):
 
         if success:
             self.state = State.IDLE
+            Self.blocks_placed += 1
             goal_handle.succeed()
         else:
             self.state = State.IDLE
