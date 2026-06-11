@@ -368,8 +368,8 @@ class RobotFSM(Node):
 
         success = await self.navigate_to_pose(pickup_offset)
         self.get_logger().info(f'Arrived at pickup location: {success}')
-        # if not success:
-        #     return False
+        if not success:
+            success = await self.navigate_to_pose(pickup_pose)
 
         # Nav2 stops within its (coarse) goal tolerance; fine-tune the heading
         # in place via cmd_vel so the base faces the pickup centroid.
@@ -401,6 +401,8 @@ class RobotFSM(Node):
         dropoff_offset.pose.orientation.w = 1.0
         success = await self.navigate_to_pose(dropoff_offset)
 
+        if not success:
+            success = await self.navigate_to_pose(dropoff_pose)
         if not success:
             return False
 
